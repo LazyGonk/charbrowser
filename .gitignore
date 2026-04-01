@@ -1,0 +1,52 @@
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment / local overrides
+.env
+.env.*
+!.env.example
+*.local
+
+# Tauri / Rust build artifacts
+src-tauri/target/
+src-tauri/gen/
+src-tauri/.cargo/
+
+# Tauri bundler outputs
+src-tauri/target/release/bundle/
+src-tauri/target/release/resources/
+src-tauri/target/release/wix/
+src-tauri/target/release/nsis/
+
+# Coverage and temp files
+coverage/
+tmp/
+temp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.user
+*.userossc
+*.sln.docstates
+*.sw?

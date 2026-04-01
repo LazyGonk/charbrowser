@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CharBrowser</title>
+    <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+    <div id="app">
+        <div class="toolbar">
+            <button id="openFolderBtn" class="btn">Open Folder</button>
+            <div class="drop-zone-hint">or drag & drop a file anywhere</div>
+            <div class="toolbar-tip">Tip: Use Arrow Up/Down to select files. Drag the separators to resize folder, preview, and metadata panes.</div>
+            <button id="showLicensesBtn" class="btn btn-secondary btn-small">Licenses</button>
+        </div>
+        
+        <div class="main-container">
+            <div class="sidebar">
+                <div class="folder-path" id="folderPath">No folder opened</div>
+                <div class="folder-filters" id="folderFilters">
+                    <input id="fileNameFilter" class="folder-filter-input" type="text" placeholder="Filter by filename" />
+                    <div class="folder-filter-row">
+                        <select id="fileTypeFilter" class="folder-filter-select">
+                            <option value="all">All Types</option>
+                            <option value="image">Images</option>
+                            <option value="video">Videos</option>
+                            <option value="audio">Audio</option>
+                        </select>
+                        <label class="folder-filter-checkbox">
+                            <input id="mediaOnlyToggle" type="checkbox" checked />
+                            Media only
+                        </label>
+                    </div>
+                    <input id="metadataWordFilter" class="folder-filter-input" type="text" placeholder="Metadata contains word" />
+                    <div class="folder-filter-row folder-filter-row-compact">
+                        <label class="folder-filter-checkbox">
+                            <input id="hasEmbeddedJsonOnly" type="checkbox" />
+                            Embedded JSON only
+                        </label>
+                        <label class="folder-filter-checkbox">
+                            <input id="hasExifOnly" type="checkbox" />
+                            Has EXIF only
+                        </label>
+                    </div>
+                    <div class="folder-filter-row">
+                        <select id="sortByFilter" class="folder-filter-select">
+                            <option value="name">Sort: Name</option>
+                            <option value="size">Sort: Size</option>
+                            <option value="date">Sort: Date</option>
+                            <option value="duration">Sort: Duration</option>
+                            <option value="resolution">Sort: Resolution</option>
+                        </select>
+                        <select id="sortDirectionFilter" class="folder-filter-select folder-filter-select-small">
+                            <option value="asc">Asc</option>
+                            <option value="desc">Desc</option>
+                        </select>
+                    </div>
+                    <div id="folderFilterStatus" class="folder-filter-status"></div>
+                </div>
+                <div class="file-list" id="fileList" tabindex="0"></div>
+            </div>
+            <div class="splitter splitter-vertical" id="sidebarSplitter" role="separator" aria-orientation="vertical" aria-label="Resize folder view"></div>
+            
+            <div class="content">
+                <div class="drop-zone" id="dropZone">
+                    <div class="drop-zone-content">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <h2>Drop a file here</h2>
+                        <p>or click "Open Folder" to browse files</p>
+                    </div>
+                </div>
+                
+                <div class="metadata-view" id="metadataView" style="display: none;">
+                    <div class="preview-area">
+                        <div class="preview-stage">
+                            <img id="preview" class="preview-image" style="display: none;" />
+                            <video id="videoPreview" class="preview-video" style="display: none;" controls preload="metadata"></video>
+                            <div id="noPreview" class="no-preview">No preview available</div>
+                        </div>
+                        <div id="characterTextPanel" class="character-text-panel" style="display: none;">
+                            <h3>Character Text</h3>
+                            <div class="character-text-block">
+                                <h4>Description</h4>
+                                <div id="characterDescription" class="character-text-content"></div>
+                            </div>
+                            <div class="character-text-block">
+                                <h4>First Message</h4>
+                                <div id="characterFirstMes" class="character-text-content"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="splitter splitter-horizontal" id="metadataSplitter" role="separator" aria-orientation="horizontal" aria-label="Resize metadata panel"></div>
+                    
+                    <div class="metadata-panel">
+                        <h2>File Information</h2>
+                        <div id="metadataContent" class="metadata-content"></div>
+                        <div id="embeddedJsonSection" class="embedded-json-section" style="display: none;">
+                            <h3>Embedded JSON</h3>
+                            <div class="embedded-json-filter-row">
+                                <div class="embedded-json-filter-item">
+                                    <label for="embeddedJsonFormatFilter">Format</label>
+                                    <select id="embeddedJsonFormatFilter" class="embedded-json-select">
+                                        <option value="all">All</option>
+                                        <option value="plaintext">Plaintext</option>
+                                        <option value="base64">Base64</option>
+                                        <option value="zTXt-compressed">zTXt-compressed</option>
+                                    </select>
+                                </div>
+                                <div class="embedded-json-filter-item">
+                                    <label for="embeddedJsonTextFilter">Frame/Label Filter</label>
+                                    <input id="embeddedJsonTextFilter" class="embedded-json-text-filter" type="text" placeholder="e.g. TXXX, prompt, workflow, chara" />
+                                </div>
+                            </div>
+                            <label for="embeddedJsonSelect">Entry</label>
+                            <select id="embeddedJsonSelect" class="embedded-json-select"></select>
+
+                            <label id="embeddedJsonPayloadLabel" for="embeddedJsonBase64">Payload</label>
+                            <textarea id="embeddedJsonBase64" class="json-editor" readonly></textarea>
+
+                            <label for="embeddedJsonEditor">Decoded JSON</label>
+                            <textarea id="embeddedJsonEditor" class="json-editor"></textarea>
+
+                            <div id="embeddedJsonFieldsSection" class="embedded-json-fields" style="display: none;">
+                                <h4>Detected Text Fields</h4>
+                                <div id="embeddedJsonFieldsList" class="embedded-json-fields-list"></div>
+                            </div>
+
+                            <div class="embedded-json-actions">
+                                <button id="saveEmbeddedJsonBtn" class="btn">Save Embedded JSON</button>
+                                <div id="embeddedJsonStatus" class="embedded-json-status"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="jsonDiffModal" class="json-diff-modal" style="display: none;">
+        <div class="json-diff-dialog">
+            <h3>Review JSON Changes</h3>
+            <div id="jsonDiffSummary" class="json-diff-summary"></div>
+            <div class="json-diff-grid">
+                <div class="json-diff-col">
+                    <h4>Original</h4>
+                    <pre id="jsonDiffOriginal" class="json-diff-pre"></pre>
+                </div>
+                <div class="json-diff-col">
+                    <h4>Edited</h4>
+                    <pre id="jsonDiffEdited" class="json-diff-pre"></pre>
+                </div>
+            </div>
+            <div class="json-diff-actions">
+                <button id="confirmJsonSaveBtn" class="btn">Confirm Save</button>
+                <button id="cancelJsonSaveBtn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="licensesModal" class="json-diff-modal licenses-modal" style="display: none;">
+        <div class="json-diff-dialog licenses-dialog">
+            <h3>Third-Party Copyrights & Licenses</h3>
+            <div class="json-diff-summary">Copyright (c) 2026 LazyGonk. CharBrowser application license: <a href="https://spdx.org/licenses/MIT.html" target="_blank" rel="noreferrer">MIT</a>. Third-party notices are listed below.</div>
+            <div id="licensesMeta" class="json-diff-summary"></div>
+            <div class="licenses-toolbar">
+                <input id="licensesSearchInput" class="folder-filter-input" type="text" placeholder="Search library, license, author..." />
+                <select id="licensesEcosystemFilter" class="folder-filter-select folder-filter-select-smallwide">
+                    <option value="all">All</option>
+                    <option value="npm">npm</option>
+                    <option value="cargo">cargo</option>
+                </select>
+            </div>
+            <div class="licenses-table-wrap">
+                <table class="licenses-table">
+                    <thead>
+                        <tr>
+                            <th>Library</th>
+                            <th>Version</th>
+                            <th>License</th>
+                            <th>Copyright</th>
+                            <th>Links</th>
+                        </tr>
+                    </thead>
+                    <tbody id="licensesTableBody"></tbody>
+                </table>
+            </div>
+            <div class="json-diff-actions">
+                <a id="openNoticesFileLink" href="/THIRD_PARTY_NOTICES.md" target="_blank" rel="noreferrer" class="btn btn-secondary">Open Notices</a>
+                <button id="closeLicensesBtn" class="btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="docViewerModal" class="json-diff-modal" style="display: none;">
+        <div class="json-diff-dialog doc-viewer-dialog">
+            <h3 id="docViewerTitle">Document</h3>
+            <pre id="docViewerContent" class="json-diff-pre doc-viewer-pre"></pre>
+            <div class="json-diff-actions">
+                <button id="closeDocViewerBtn" class="btn">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
+
+const root = process.cwd();
+const outJsonPath = path.join(root, 'public', 'third-party-licenses.json');
+const outMdPath = path.join(root, 'THIRD_PARTY_NOTICES.md');
+const outPublicMdPath = path.join(root, 'public', 'THIRD_PARTY_NOTICES.md');
+
+function safeReadJson(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeLicense(licenseValue) {
+  if (!licenseValue) return 'UNKNOWN';
+  if (typeof licenseValue === 'string') return licenseValue;
+  if (Array.isArray(licenseValue)) {
+    return licenseValue
+      .map((item) => normalizeLicense(item))
+      .filter(Boolean)
+      .join(' OR ');
+  }
+  if (typeof licenseValue === 'object') {
+    if (licenseValue.type) return String(licenseValue.type);
+    if (licenseValue.name) return String(licenseValue.name);
+  }
+  return 'UNKNOWN';
+}
+
+function getNpmPackages() {
+  const lock = safeReadJson(path.join(root, 'package-lock.json'));
+  if (!lock || !lock.packages) {
+    return [];
+  }
+
+  const out = [];
+  const seen = new Set();
+
+  for (const [pkgPath, value] of Object.entries(lock.packages)) {
+    if (!pkgPath.startsWith('node_modules/')) continue;
+
+    const name = value.name || pkgPath.replace(/^node_modules\//, '');
+    const version = value.version || 'UNKNOWN';
+    const key = `${name}@${version}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const packageJsonPath = path.join(root, pkgPath, 'package.json');
+    const packageJson = safeReadJson(packageJsonPath) || {};
+
+    const license = normalizeLicense(packageJson.license || value.license);
+    const homepage = normalizeRepoUrl(packageJson.homepage || packageJson.repository?.url || '');
+    const author = typeof packageJson.author === 'string'
+      ? packageJson.author
+      : packageJson.author?.name || '';
+
+    out.push({
+      ecosystem: 'npm',
+      name,
+      version,
+      license,
+      homepage,
+      author,
+    });
+  }
+
+  out.sort((a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`));
+  return out;
+}
+
+function normalizeRepoUrl(url) {
+  if (!url) return '';
+  let value = String(url).trim();
+  value = value.replace(/^git\+/, '').replace(/\.git$/, '');
+  if (value.startsWith('git://')) {
+    value = 'https://' + value.slice('git://'.length);
+  }
+  return value;
+}
+
+function getCargoPackages() {
+  const cmd = 'cargo metadata --format-version 1 --locked';
+  const cargoCwd = path.join(root, 'src-tauri');
+
+  const runMetadata = (extraEnv = {}) => execSync(cmd, {
+    cwd: cargoCwd,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    maxBuffer: 256 * 1024 * 1024,
+    env: {
+      ...process.env,
+      ...extraEnv,
+    },
+  });
+
+  let raw;
+  try {
+    // Fast path when lockfile dependencies are already available locally.
+    raw = runMetadata({ CARGO_NET_OFFLINE: 'true' });
+  } catch (offlineError) {
+    const stderr = String(offlineError?.stderr || '');
+    if (!stderr.includes('offline was specified')) {
+      throw offlineError;
+    }
+
+    console.warn('Offline cargo metadata failed; retrying with network access...');
+    raw = runMetadata({ CARGO_NET_OFFLINE: 'false' });
+  }
+
+  const metadata = JSON.parse(raw);
+  const workspaceNames = new Set((metadata.workspace_members || [])
+    .map((member) => {
+      const pkg = (metadata.packages || []).find((p) => p.id === member);
+      return pkg ? pkg.name : null;
+    })
+    .filter(Boolean));
+
+  const out = [];
+  const seen = new Set();
+
+  for (const pkg of metadata.packages || []) {
+    if (workspaceNames.has(pkg.name)) continue;
+
+    const version = pkg.version || 'UNKNOWN';
+    const key = `${pkg.name}@${version}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const license = normalizeLicense(pkg.license || pkg.license_file);
+    const homepage = normalizeRepoUrl(pkg.homepage || pkg.repository || pkg.documentation || '');
+    const author = Array.isArray(pkg.authors) ? pkg.authors.join(', ') : '';
+
+    out.push({
+      ecosystem: 'cargo',
+      name: pkg.name,
+      version,
+      license,
+      homepage,
+      author,
+    });
+  }
+
+  out.sort((a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`));
+  return out;
+}
+
+function spdxLink(license) {
+  if (!license || license === 'UNKNOWN') return '';
+  const firstToken = license.split(/\s+OR\s+|\s+AND\s+|\//i)[0].replace(/[()]/g, '');
+  if (!firstToken) return '';
+  return `https://spdx.org/licenses/${encodeURIComponent(firstToken)}.html`;
+}
+
+function toMarkdown(rows) {
+  const lines = [];
+  lines.push('# Third-Party Notices');
+  lines.push('');
+  lines.push('The CharBrowser application itself is licensed under MIT (see `LICENSE`). Copyright (c) 2026 LazyGonk.');
+  lines.push('');
+  lines.push('This file lists third-party libraries used by this project and their declared licenses.');
+  lines.push('Generated by `scripts/generate-licenses.mjs`.');
+  lines.push('');
+
+  const grouped = {
+    npm: rows.filter((r) => r.ecosystem === 'npm'),
+    cargo: rows.filter((r) => r.ecosystem === 'cargo'),
+  };
+
+  for (const ecosystem of ['npm', 'cargo']) {
+    lines.push(`## ${ecosystem.toUpperCase()} Dependencies (${grouped[ecosystem].length})`);
+    lines.push('');
+    lines.push('|Library|Version|License|License Link|Homepage/Repo|Author|');
+    lines.push('|---|---:|---|---|---|---|');
+
+    for (const row of grouped[ecosystem]) {
+      const licenseUrl = spdxLink(row.license);
+      const licenseLink = licenseUrl ? `[${row.license}](${licenseUrl})` : row.license;
+      const homepageLink = row.homepage ? `[link](${row.homepage})` : '';
+      lines.push(`|${row.name}|${row.version}|${row.license}|${licenseLink}|${homepageLink}|${row.author || ''}|`);
+    }
+
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+function main() {
+  const npm = getNpmPackages();
+  const cargo = getCargoPackages();
+  const rows = [...npm, ...cargo];
+
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    total: rows.length,
+    npmCount: npm.length,
+    cargoCount: cargo.length,
+    items: rows,
+  };
+
+  fs.mkdirSync(path.dirname(outJsonPath), { recursive: true });
+  fs.writeFileSync(outJsonPath, JSON.stringify(payload, null, 2));
+  const markdown = toMarkdown(rows);
+  fs.writeFileSync(outMdPath, markdown);
+  fs.writeFileSync(outPublicMdPath, markdown);
+
+  console.log(`Generated ${outJsonPath}`);
+  console.log(`Generated ${outMdPath}`);
+  console.log(`Generated ${outPublicMdPath}`);
+  console.log(`Total dependencies: ${rows.length}`);
+}
+
+main();

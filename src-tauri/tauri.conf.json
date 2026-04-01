@@ -1,0 +1,37 @@
+{
+  "productName": "CharBrowser",
+  "version": "0.1.0",
+  "identifier": "com.charbrowser",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "appimage"],
+    "copyright": "Copyright (c) 2026 LazyGonk",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "CharBrowser",
+        "width": 1200,
+        "height": 800,
+        "resizable": true,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}
