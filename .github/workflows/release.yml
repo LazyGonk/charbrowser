@@ -83,9 +83,16 @@ jobs:
       - name: Build Windows portable executable
         run: npm run tauri:build:portable
 
+      - name: Rename Windows portable executable
+        shell: pwsh
+        run: |
+          $portableName = "CharBrowser_${{ github.ref_name }}_${{ runner.arch }}_portable.exe"
+          Copy-Item "src-tauri/target/release/charbrowser.exe" "src-tauri/target/release/$portableName" -Force
+          "WINDOWS_PORTABLE_ASSET=src-tauri/target/release/$portableName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Upload Windows portable executable
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
-          files: src-tauri/target/release/charbrowser.exe
+          files: ${{ env.WINDOWS_PORTABLE_ASSET }}

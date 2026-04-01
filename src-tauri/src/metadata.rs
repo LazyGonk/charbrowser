@@ -53,6 +53,33 @@ struct Mp3JsonMatch {
     frame_kind: Mp3FrameKind,
 }
 
+struct VideoJsonMatch {
+    id: usize,
+    start: usize,
+    end: usize,
+    label: String,
+    payload: String,
+    decoded_json: serde_json::Value,
+    encoding: JsonPayloadEncoding,
+    atom_path: Vec<usize>,
+}
+
+#[derive(Clone, Copy)]
+enum Mp4AtomSizeKind {
+    Fixed32(u32),
+    Extended64(u64),
+    ToEof,
+}
+
+struct Mp4Atom {
+    start: usize,
+    end: usize,
+    data_start: usize,
+    atom_type: [u8; 4],
+    size_kind: Mp4AtomSizeKind,
+    parent: Option<usize>,
+}
+
 enum Mp3FrameKind {
     Text { frame_id: String },
     ExtendedText { description: String },
@@ -273,6 +300,16 @@ pub fn file_has_embedded_json(file_path: &str) -> Result<bool, String> {
 
         let bytes = fs::read(path).map_err(|e| format!("Failed to read MP3 file: {}", e))?;
         return mp3_raw_has_embedded_json(&bytes);
+    }
+
+    if matches!(ext.as_str(), "mp4" | "mov") {
+        let bytes = fs::read(path).map_err(|e| format!("Failed to read video file: {}", e))?;
+        return Ok(!find_mp4_embedded_json_matches(&bytes)?.is_empty());
+    }
+
+    if matches!(ext.as_str(), "avi" | "mkv") {
+        let bytes = fs::read(path).map_err(|e| format!("Failed to read video file: {}", e))?;
+        return Ok(!find_video_embedded_json_matches(&bytes)?.is_empty());
     }
 
     Ok(false)
@@ -646,6 +683,44 @@ pub fn list_embedded_base64_json_entries(file_path: &str) -> Result<Vec<Embedded
             .collect());
     }
 
+    if matches!(ext.as_str(), "mp4" | "mov") {
+        let bytes = fs::read(path).map_err(|e| format!("Failed to read video file: {}", e))?;
+        let matches = find_mp4_embedded_json_matches(&bytes)?;
+
+        return Ok(matches
+            .into_iter()
+            .map(|m| EmbeddedJsonEntry {
+                id: m.id,
+                chunk_type: "mp4-atom".to_string(),
+                label: m.label,
+                base64: m.payload.clone(),
+                payload: m.payload,
+                payload_format: payload_format_name(&m.encoding).to_string(),
+                decoded_json: serde_json::to_string_pretty(&m.decoded_json)
+                    .unwrap_or_else(|_| "{}".to_string()),
+            })
+            .collect());
+    }
+
+    if matches!(ext.as_str(), "avi" | "mkv") {
+        let bytes = fs::read(path).map_err(|e| format!("Failed to read video file: {}", e))?;
+        let matches = find_video_embedded_json_matches(&bytes)?;
+
+        return Ok(matches
+            .into_iter()
+            .map(|m| EmbeddedJsonEntry {
+                id: m.id,
+                chunk_type: "video-raw".to_string(),
+                label: m.label,
+                base64: m.payload.clone(),
+                payload: m.payload,
+                payload_format: payload_format_name(&m.encoding).to_string(),
+                decoded_json: serde_json::to_string_pretty(&m.decoded_json)
+                    .unwrap_or_else(|_| "{}".to_string()),
+            })
+            .collect());
+    }
+
     Ok(Vec::new())
 }
 
@@ -669,7 +744,76 @@ pub fn update_embedded_base64_json(
         return update_mp3_embedded_json(path, entry_id, json_text);
     }
 
-    Err("Editing embedded JSON is currently supported for PNG and MP3 files".to_string())
+    if matches!(ext.as_str(), "mp4" | "mov" | "avi" | "mkv") {
+        return update_video_embedded_json(path, &ext, entry_id, json_text);
+    }
+
+    Err("Editing embedded JSON is currently supported for PNG, MP3, and common video files".to_string())
+}
+
+fn update_video_embedded_json(path: &Path, ext: &str, entry_id: usize, json_text: &str) -> Result<(), String> {
+    let new_json_value: serde_json::Value =
+        serde_json::from_str(json_text).map_err(|e| format!("Invalid JSON: {}", e))?;
+    let new_json_compact = serde_json::to_string(&new_json_value)
+        .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+
+    if matches!(ext, "mp4" | "mov") {
+        return update_mp4_embedded_json(path, entry_id, &new_json_compact);
+    }
+
+    let mut bytes = fs::read(path).map_err(|e| format!("Failed to read video file: {}", e))?;
+    let matches = find_video_embedded_json_matches(&bytes)?;
+    let target = matches
+        .into_iter()
+        .find(|m| m.id == entry_id)
+        .ok_or_else(|| "Embedded JSON entry not found".to_string())?;
+
+    let new_payload = encode_payload_with_encoding(&new_json_compact, &target.encoding)
+        .map_err(|e| format!("Failed to encode payload: {}", e))?;
+    let old_len = target.end.saturating_sub(target.start);
+
+    if new_payload.len() != old_len {
+        return Err(format!(
+            "Edited payload length changed (old {} bytes, new {} bytes). For video files, keep the JSON length unchanged to avoid breaking container offsets.",
+            old_len,
+            new_payload.len()
+        ));
+    }
+
+    bytes.splice(target.start..target.end, new_payload.iter().copied());
+    write_with_backup(path, &bytes)
+        .map_err(|e| format!("Failed to write updated video file: {}", e))?;
+    Ok(())
+}
+
+fn update_mp4_embedded_json(path: &Path, entry_id: usize, new_json_compact: &str) -> Result<(), String> {
+    let mut bytes = fs::read(path).map_err(|e| format!("Failed to read MP4/MOV file: {}", e))?;
+    let (atoms, matches) = find_mp4_embedded_json_matches_with_atoms(&bytes)?;
+    let target = matches
+        .into_iter()
+        .find(|m| m.id == entry_id)
+        .ok_or_else(|| "Embedded JSON entry not found".to_string())?;
+
+    let new_payload = encode_payload_with_encoding(new_json_compact, &target.encoding)
+        .map_err(|e| format!("Failed to encode payload: {}", e))?;
+
+    let old_len = target.end.saturating_sub(target.start);
+    let delta = new_payload.len() as isize - old_len as isize;
+
+    bytes.splice(target.start..target.end, new_payload.iter().copied());
+
+    if delta != 0 {
+        for atom_idx in target.atom_path {
+            let atom = atoms
+                .get(atom_idx)
+                .ok_or_else(|| "Invalid MP4 atom path reference".to_string())?;
+            apply_mp4_atom_size_delta(&mut bytes, atom, delta)?;
+        }
+    }
+
+    write_with_backup(path, &bytes)
+        .map_err(|e| format!("Failed to write updated MP4/MOV file: {}", e))?;
+    Ok(())
 }
 
 fn update_png_embedded_json(path: &Path, entry_id: usize, json_text: &str) -> Result<(), String> {
@@ -1407,6 +1551,459 @@ fn mp3_raw_has_embedded_json(bytes: &[u8]) -> Result<bool, String> {
     Ok(false)
 }
 
+fn find_video_embedded_json_matches(bytes: &[u8]) -> Result<Vec<VideoJsonMatch>, String> {
+    let mut matches = Vec::new();
+    let mut next_id = 0usize;
+
+    for (start, end) in find_json_object_spans(bytes) {
+        if let Ok(text) = str::from_utf8(&bytes[start..end]) {
+            if let Some((value, encoding, payload)) = decode_json_payload(text) {
+                if matches!(encoding, JsonPayloadEncoding::PlainText) {
+                    matches.push(VideoJsonMatch {
+                        id: next_id,
+                        start,
+                        end,
+                        label: format!("json@{}", start),
+                        payload,
+                        decoded_json: value,
+                        encoding,
+                        atom_path: Vec::new(),
+                    });
+                    next_id += 1;
+                }
+            }
+        }
+    }
+
+    for (start, end) in find_base64_candidate_spans(bytes) {
+        let token = match str::from_utf8(&bytes[start..end]) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let Some((value, encoding, payload)) = decode_json_payload(token) else {
+            continue;
+        };
+
+        if !matches!(encoding, JsonPayloadEncoding::Base64(_)) {
+            continue;
+        }
+
+        if matches.iter().any(|m| !(end <= m.start || start >= m.end)) {
+            continue;
+        }
+
+        matches.push(VideoJsonMatch {
+            id: next_id,
+            start,
+            end,
+            label: format!("base64@{}", start),
+            payload,
+            decoded_json: value,
+            encoding,
+            atom_path: Vec::new(),
+        });
+        next_id += 1;
+    }
+
+    Ok(matches)
+}
+
+fn find_json_object_spans(bytes: &[u8]) -> Vec<(usize, usize)> {
+    let mut spans = Vec::new();
+    let mut i = 0usize;
+
+    while i < bytes.len() {
+        if bytes[i] != b'{' {
+            i += 1;
+            continue;
+        }
+
+        if let Some(end) = parse_json_object_span(bytes, i) {
+            spans.push((i, end));
+            i = end;
+        } else {
+            i += 1;
+        }
+    }
+
+    spans
+}
+
+fn parse_json_object_span(bytes: &[u8], start: usize) -> Option<usize> {
+    if bytes.get(start).copied()? != b'{' {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaping = false;
+
+    for (idx, b) in bytes.iter().enumerate().skip(start) {
+        if in_string {
+            if escaping {
+                escaping = false;
+                continue;
+            }
+
+            if *b == b'\\' {
+                escaping = true;
+                continue;
+            }
+
+            if *b == b'"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match *b {
+            b'"' => in_string = true,
+            b'{' => depth += 1,
+            b'}' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    return Some(idx + 1);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn find_base64_candidate_spans(bytes: &[u8]) -> Vec<(usize, usize)> {
+    const MIN_BASE64_TOKEN_LEN: usize = 24;
+    let mut spans = Vec::new();
+    let mut i = 0usize;
+
+    while i < bytes.len() {
+        if !is_base64_char(bytes[i]) {
+            i += 1;
+            continue;
+        }
+
+        let start = i;
+        while i < bytes.len() && is_base64_char(bytes[i]) {
+            i += 1;
+        }
+
+        if i.saturating_sub(start) >= MIN_BASE64_TOKEN_LEN {
+            spans.push((start, i));
+        }
+    }
+
+    spans
+}
+
+fn is_base64_char(byte: u8) -> bool {
+    matches!(byte,
+        b'A'..=b'Z'
+        | b'a'..=b'z'
+        | b'0'..=b'9'
+        | b'+'
+        | b'/'
+        | b'='
+        | b'-'
+        | b'_'
+    )
+}
+
+fn find_mp4_embedded_json_matches(bytes: &[u8]) -> Result<Vec<VideoJsonMatch>, String> {
+    let (_atoms, matches) = find_mp4_embedded_json_matches_with_atoms(bytes)?;
+    Ok(matches)
+}
+
+fn find_mp4_embedded_json_matches_with_atoms(bytes: &[u8]) -> Result<(Vec<Mp4Atom>, Vec<VideoJsonMatch>), String> {
+    let mut atoms = Vec::new();
+    parse_mp4_atoms(bytes, 0, bytes.len(), None, &mut atoms)?;
+
+    let mut matches = Vec::new();
+    let mut next_id = 0usize;
+
+    for (idx, atom) in atoms.iter().enumerate() {
+        if atom.data_start >= atom.end {
+            continue;
+        }
+
+        if !mp4_atom_is_json_candidate(atom, &atoms) {
+            continue;
+        }
+
+        let payload_start = if atom.atom_type == *b"data" {
+            atom.data_start.saturating_add(8).min(atom.end)
+        } else {
+            atom.data_start
+        };
+
+        if payload_start >= atom.end {
+            continue;
+        }
+
+        let atom_bytes = &bytes[payload_start..atom.end];
+
+        for (rel_start, rel_end) in find_json_object_spans(atom_bytes) {
+            if let Ok(text) = str::from_utf8(&atom_bytes[rel_start..rel_end]) {
+                if let Some((value, encoding, payload)) = decode_json_payload(text) {
+                    matches.push(VideoJsonMatch {
+                        id: next_id,
+                        start: payload_start + rel_start,
+                        end: payload_start + rel_end,
+                        label: format!("{}@{}", atom_type_label(atom.atom_type), payload_start + rel_start),
+                        payload,
+                        decoded_json: value,
+                        encoding,
+                        atom_path: collect_mp4_atom_path(idx, &atoms),
+                    });
+                    next_id += 1;
+                }
+            }
+        }
+
+        for (rel_start, rel_end) in find_base64_candidate_spans(atom_bytes) {
+            let token = match str::from_utf8(&atom_bytes[rel_start..rel_end]) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            let Some((value, encoding, payload)) = decode_json_payload(token) else {
+                continue;
+            };
+
+            if !matches!(encoding, JsonPayloadEncoding::Base64(_)) {
+                continue;
+            }
+
+            let abs_start = payload_start + rel_start;
+            let abs_end = payload_start + rel_end;
+
+            if matches.iter().any(|m| !(abs_end <= m.start || abs_start >= m.end)) {
+                continue;
+            }
+
+            matches.push(VideoJsonMatch {
+                id: next_id,
+                start: abs_start,
+                end: abs_end,
+                label: format!("{}@{}", atom_type_label(atom.atom_type), abs_start),
+                payload,
+                decoded_json: value,
+                encoding,
+                atom_path: collect_mp4_atom_path(idx, &atoms),
+            });
+            next_id += 1;
+        }
+    }
+
+    Ok((atoms, matches))
+}
+
+fn parse_mp4_atoms(
+    bytes: &[u8],
+    start: usize,
+    end: usize,
+    parent: Option<usize>,
+    out: &mut Vec<Mp4Atom>,
+) -> Result<(), String> {
+    let mut offset = start;
+
+    while offset + 8 <= end && offset + 8 <= bytes.len() {
+        let size32 = u32::from_be_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]);
+
+        let atom_type = [
+            bytes[offset + 4],
+            bytes[offset + 5],
+            bytes[offset + 6],
+            bytes[offset + 7],
+        ];
+
+        let (atom_size, header_size, size_kind) = if size32 == 0 {
+            (end.saturating_sub(offset), 8usize, Mp4AtomSizeKind::ToEof)
+        } else if size32 == 1 {
+            if offset + 16 > end || offset + 16 > bytes.len() {
+                break;
+            }
+            let size64 = u64::from_be_bytes([
+                bytes[offset + 8],
+                bytes[offset + 9],
+                bytes[offset + 10],
+                bytes[offset + 11],
+                bytes[offset + 12],
+                bytes[offset + 13],
+                bytes[offset + 14],
+                bytes[offset + 15],
+            ]);
+            if size64 < 16 {
+                break;
+            }
+            let size = usize::try_from(size64).map_err(|_| "MP4 atom size is too large".to_string())?;
+            (size, 16usize, Mp4AtomSizeKind::Extended64(size64))
+        } else {
+            if size32 < 8 {
+                break;
+            }
+            (size32 as usize, 8usize, Mp4AtomSizeKind::Fixed32(size32))
+        };
+
+        if atom_size == 0 {
+            break;
+        }
+
+        let atom_end = offset.saturating_add(atom_size);
+        if atom_end > end || atom_end > bytes.len() {
+            break;
+        }
+
+        let data_start = offset + header_size;
+        let idx = out.len();
+        out.push(Mp4Atom {
+            start: offset,
+            end: atom_end,
+            data_start,
+            atom_type,
+            size_kind,
+            parent,
+        });
+
+        if mp4_atom_is_container(atom_type) {
+            let mut child_start = data_start;
+            if atom_type == *b"meta" {
+                child_start = child_start.saturating_add(4).min(atom_end);
+            }
+            if child_start < atom_end {
+                parse_mp4_atoms(bytes, child_start, atom_end, Some(idx), out)?;
+            }
+        }
+
+        if matches!(size_kind, Mp4AtomSizeKind::ToEof) {
+            break;
+        }
+
+        offset = atom_end;
+    }
+
+    Ok(())
+}
+
+fn mp4_atom_is_container(atom_type: [u8; 4]) -> bool {
+    matches!(
+        &atom_type,
+        b"moov"
+            | b"udta"
+            | b"meta"
+            | b"ilst"
+            | b"trak"
+            | b"mdia"
+            | b"minf"
+            | b"stbl"
+            | b"edts"
+            | b"dinf"
+            | b"mvex"
+            | b"moof"
+            | b"traf"
+            | b"mfra"
+    )
+}
+
+fn mp4_atom_is_json_candidate(atom: &Mp4Atom, atoms: &[Mp4Atom]) -> bool {
+    if atom.end.saturating_sub(atom.data_start) > 8 * 1024 * 1024 {
+        return false;
+    }
+
+    if atom.atom_type == *b"data"
+        || atom.atom_type == *b"----"
+        || atom.atom_type == *b"desc"
+        || atom.atom_type == *b"ldes"
+        || atom.atom_type == *b"cmt "
+    {
+        return true;
+    }
+
+    has_mp4_ancestor_type(atom, atoms, *b"ilst") || has_mp4_ancestor_type(atom, atoms, *b"udta")
+}
+
+fn has_mp4_ancestor_type(atom: &Mp4Atom, atoms: &[Mp4Atom], wanted: [u8; 4]) -> bool {
+    let mut current = atom.parent;
+    while let Some(idx) = current {
+        let Some(parent) = atoms.get(idx) else {
+            return false;
+        };
+        if parent.atom_type == wanted {
+            return true;
+        }
+        current = parent.parent;
+    }
+    false
+}
+
+fn collect_mp4_atom_path(mut atom_idx: usize, atoms: &[Mp4Atom]) -> Vec<usize> {
+    let mut path = Vec::new();
+    loop {
+        path.push(atom_idx);
+        let Some(atom) = atoms.get(atom_idx) else {
+            break;
+        };
+        let Some(parent_idx) = atom.parent else {
+            break;
+        };
+        atom_idx = parent_idx;
+    }
+    path
+}
+
+fn apply_mp4_atom_size_delta(bytes: &mut [u8], atom: &Mp4Atom, delta: isize) -> Result<(), String> {
+    match atom.size_kind {
+        Mp4AtomSizeKind::Fixed32(old_size) => {
+            let new_size = old_size as isize + delta;
+            if new_size < 8 {
+                return Err("MP4 atom size underflow during rewrite".to_string());
+            }
+            let new_u32 = u32::try_from(new_size)
+                .map_err(|_| "MP4 atom exceeded 32-bit size while rewriting".to_string())?;
+            if atom.start + 4 > bytes.len() {
+                return Err("Invalid MP4 size write offset".to_string());
+            }
+            bytes[atom.start..atom.start + 4].copy_from_slice(&new_u32.to_be_bytes());
+            Ok(())
+        }
+        Mp4AtomSizeKind::Extended64(old_size) => {
+            let new_size = old_size as i128 + delta as i128;
+            if new_size < 16 {
+                return Err("MP4 extended atom size underflow during rewrite".to_string());
+            }
+            let new_u64 = u64::try_from(new_size)
+                .map_err(|_| "MP4 extended atom size overflow during rewrite".to_string())?;
+            if atom.start + 16 > bytes.len() {
+                return Err("Invalid MP4 extended-size write offset".to_string());
+            }
+            bytes[atom.start..atom.start + 4].copy_from_slice(&1u32.to_be_bytes());
+            bytes[atom.start + 8..atom.start + 16].copy_from_slice(&new_u64.to_be_bytes());
+            Ok(())
+        }
+        Mp4AtomSizeKind::ToEof => Ok(()),
+    }
+}
+
+fn atom_type_label(atom_type: [u8; 4]) -> String {
+    if atom_type.iter().all(|b| b.is_ascii_graphic() || *b == b' ') {
+        String::from_utf8_lossy(&atom_type).to_string()
+    } else {
+        format!(
+            "0x{:02X}{:02X}{:02X}{:02X}",
+            atom_type[0], atom_type[1], atom_type[2], atom_type[3]
+        )
+    }
+}
+
 fn synchsafe_to_u32(bytes: &[u8]) -> u32 {
     if bytes.len() < 4 {
         return 0;
@@ -1522,5 +2119,86 @@ fn decode_id3_text(enc: u8, bytes: &[u8]) -> Option<String> {
             String::from_utf16(&units).ok()
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn media_fixture_path(file_name: &str) -> Option<std::path::PathBuf> {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("media")
+            .join(file_name);
+        if path.exists() {
+            Some(path)
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn mp4_roundtrip_embedded_json_update_keeps_file_parseable() {
+        let Some(source_path) = media_fixture_path("ComfyUI_00008_.mp4") else {
+            return;
+        };
+
+        let temp_path = std::env::temp_dir().join(format!(
+            "charbrowser-mp4-roundtrip-{}.mp4",
+            std::process::id()
+        ));
+
+        fs::copy(&source_path, &temp_path).expect("failed to copy fixture MP4");
+
+        let entries_before = list_embedded_base64_json_entries(
+            temp_path.to_str().expect("temp path must be valid UTF-8"),
+        )
+        .expect("failed to list MP4 embedded entries before update");
+
+        assert!(
+            !entries_before.is_empty(),
+            "fixture MP4 should contain at least one embedded JSON payload"
+        );
+
+        let target = &entries_before[0];
+        let mut parsed: serde_json::Value = serde_json::from_str(&target.decoded_json)
+            .expect("fixture embedded JSON should parse");
+        if let Some(obj) = parsed.as_object_mut() {
+            obj.insert(
+                "charbrowser_roundtrip_test".to_string(),
+                serde_json::json!("ok"),
+            );
+        }
+
+        let updated_text = serde_json::to_string_pretty(&parsed).expect("failed to serialize test JSON");
+        update_embedded_base64_json(
+            temp_path.to_str().expect("temp path must be valid UTF-8"),
+            target.id,
+            &updated_text,
+        )
+        .expect("failed to update MP4 embedded JSON");
+
+        let bytes_after = fs::read(&temp_path).expect("failed to read updated MP4");
+        parse_mp4_atoms(&bytes_after, 0, bytes_after.len(), None, &mut Vec::new())
+            .expect("updated MP4 atoms should remain parseable");
+
+        let entries_after = list_embedded_base64_json_entries(
+            temp_path.to_str().expect("temp path must be valid UTF-8"),
+        )
+        .expect("failed to list MP4 embedded entries after update");
+
+        assert!(
+            !entries_after.is_empty(),
+            "updated MP4 should still expose embedded JSON entries"
+        );
+        assert!(
+            entries_after
+                .iter()
+                .any(|e| e.decoded_json.contains("charbrowser_roundtrip_test")),
+            "updated JSON marker should be present after rewrite"
+        );
+
+        let _ = fs::remove_file(&temp_path);
     }
 }

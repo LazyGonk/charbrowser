@@ -470,6 +470,17 @@ body {
     letter-spacing: 0.5px;
 }
 
+.metadata-video-json-notice {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 194, 102, 0.35);
+    background: rgba(255, 194, 102, 0.08);
+    color: #f2c27b;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
 .embedded-json-section {
     margin-top: 16px;
     padding-top: 16px;

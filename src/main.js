@@ -312,7 +312,7 @@ async function hasEmbeddedJsonEntries(filePath) {
     }
 
     const ext = getExtension(filePath);
-    if (ext !== 'png' && ext !== 'mp3') {
+    if (ext !== 'png' && ext !== 'mp3' && !VIDEO_EXTS.has(ext)) {
         embeddedJsonPresenceCache.set(filePath, false);
         return false;
     }
@@ -1012,7 +1012,7 @@ async function loadEmbeddedBase64Json(filePath, ext) {
     embeddedJsonTextFilter.value = '';
     updateCharacterTextPanel(null, null);
 
-    if (ext !== 'png' && ext !== 'mp3') {
+    if (ext !== 'png' && ext !== 'mp3' && !VIDEO_EXTS.has(ext)) {
         return;
     }
 
@@ -1611,6 +1611,7 @@ async function updatePreview(filePath, ext, requestToken) {
 // Display metadata in the panel
 function displayMetadata(metadata) {
     metadataContent.innerHTML = '';
+    const selectedExt = selectedFile ? getExtension(selectedFile) : '';
     
     // Basic information
     addMetadataRow('File Name', metadata.file_name);
@@ -1667,6 +1668,13 @@ function displayMetadata(metadata) {
         metadataContent.appendChild(section);
         
         displayFormatSpecific(metadata.format_specific, section);
+    }
+
+    if (selectedExt === 'avi' || selectedExt === 'mkv') {
+        const notice = document.createElement('div');
+        notice.className = 'metadata-video-json-notice';
+        notice.textContent = 'Note: AVI/MKV embedded JSON edits must keep payload length unchanged to avoid container corruption.';
+        metadataContent.appendChild(notice);
     }
 }
 
