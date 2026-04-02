@@ -80,6 +80,7 @@
                         <div class="preview-stage">
                             <img id="preview" class="preview-image" style="display: none;" />
                             <video id="videoPreview" class="preview-video" style="display: none;" controls preload="metadata"></video>
+                            <audio id="audioPreview" class="preview-audio" style="display: none;" controls preload="metadata"></audio>
                             <div id="noPreview" class="no-preview">No preview available</div>
                         </div>
                         <div id="characterTextPanel" class="character-text-panel" style="display: none;">
@@ -119,16 +120,10 @@
                             <label for="embeddedJsonSelect">Entry</label>
                             <select id="embeddedJsonSelect" class="embedded-json-select"></select>
 
-                            <label id="embeddedJsonPayloadLabel" for="embeddedJsonBase64">Payload</label>
-                            <textarea id="embeddedJsonBase64" class="json-editor" readonly></textarea>
+                            <label id="embeddedJsonPayloadLabel">Payload</label>
+                            <pre id="embeddedJsonPayloadPreview" class="json-payload-preview"></pre>
 
-                            <label for="embeddedJsonEditor">Decoded JSON</label>
-                            <textarea id="embeddedJsonEditor" class="json-editor"></textarea>
-
-                            <div id="embeddedJsonFieldsSection" class="embedded-json-fields" style="display: none;">
-                                <h4>Detected Text Fields</h4>
-                                <div id="embeddedJsonFieldsList" class="embedded-json-fields-list"></div>
-                            </div>
+                            <div id="embeddedJsonTree" class="json-tree"></div>
 
                             <div class="embedded-json-actions">
                                 <button id="saveEmbeddedJsonBtn" class="btn">Save Embedded JSON</button>

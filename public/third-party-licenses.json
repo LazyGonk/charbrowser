@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-04-01T13:38:01.022Z",
-  "total": 621,
+  "generatedAt": "2026-04-01T21:02:22.998Z",
+  "total": 615,
   "npmCount": 61,
-  "cargoCount": 560,
+  "cargoCount": 554,
   "items": [
     {
       "ecosystem": "npm",
@@ -502,14 +502,6 @@
     },
     {
       "ecosystem": "cargo",
-      "name": "ahash",
-      "version": "0.8.12",
-      "license": "MIT OR Apache-2.0",
-      "homepage": "https://github.com/tkaitchuck/ahash",
-      "author": "Tom Kaitchuck <Tom.Kaitchuck@gmail.com>"
-    },
-    {
-      "ecosystem": "cargo",
       "name": "aho-corasick",
       "version": "1.1.4",
       "license": "Unlicense OR MIT",
@@ -707,14 +699,6 @@
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/bitflags/bitflags",
       "author": "The Rust Project Developers"
-    },
-    {
-      "ecosystem": "cargo",
-      "name": "bitreader",
-      "version": "0.3.11",
-      "license": "MIT OR Apache-2.0",
-      "homepage": "https://github.com/irauta/bitreader",
-      "author": "Ilkka Rauta <ilkka.rauta@gmail.com>"
     },
     {
       "ecosystem": "cargo",
@@ -1294,14 +1278,6 @@
     },
     {
       "ecosystem": "cargo",
-      "name": "fallible_collections",
-      "version": "0.4.9",
-      "license": "MIT/Apache-2.0",
-      "homepage": "https://github.com/vcombey/fallible_collections",
-      "author": "vcombey <vcombey@student.42.fr>"
-    },
-    {
-      "ecosystem": "cargo",
       "name": "fastrand",
       "version": "2.3.0",
       "license": "Apache-2.0 OR MIT",
@@ -1688,14 +1664,6 @@
       "ecosystem": "cargo",
       "name": "hashbrown",
       "version": "0.12.3",
-      "license": "MIT OR Apache-2.0",
-      "homepage": "https://github.com/rust-lang/hashbrown",
-      "author": "Amanieu d'Antras <amanieu@gmail.com>"
-    },
-    {
-      "ecosystem": "cargo",
-      "name": "hashbrown",
-      "version": "0.13.2",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/rust-lang/hashbrown",
       "author": "Amanieu d'Antras <amanieu@gmail.com>"
@@ -2323,14 +2291,6 @@
       "license": "BSD-3-Clause OR Apache-2.0",
       "homepage": "https://github.com/awxkee/moxcms",
       "author": "Radzivon Bartoshyk"
-    },
-    {
-      "ecosystem": "cargo",
-      "name": "mp4parse",
-      "version": "0.17.0",
-      "license": "MPL-2.0",
-      "homepage": "https://github.com/mozilla/mp4parse-rust",
-      "author": "Ralph Giles <giles@mozilla.com>, Matthew Gregan <kinetik@flim.org>, Alfredo Yang <ayang@mozilla.com>, Jon Bauman <jbauman@mozilla.com>, Bryce Seager van Dyk <bvandyk@mozilla.com>"
     },
     {
       "ecosystem": "cargo",
@@ -3531,14 +3491,6 @@
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/storyyeller/stable_deref_trait",
       "author": "Robert Grosse <n210241048576@gmail.com>"
-    },
-    {
-      "ecosystem": "cargo",
-      "name": "static_assertions",
-      "version": "1.1.0",
-      "license": "MIT OR Apache-2.0",
-      "homepage": "https://github.com/nvzqz/static-assertions-rs",
-      "author": "Nikolai Vazquez"
     },
     {
       "ecosystem": "cargo",

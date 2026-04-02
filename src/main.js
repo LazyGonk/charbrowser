@@ -2,32 +2,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 
-let currentFiles = [];
-let allFolderFiles = [];
-let selectedFile = null;
-let embeddedJsonEntries = [];
-let filteredEmbeddedJsonEntries = [];
-let pendingEmbeddedJsonSave = null;
-let embeddedJsonFieldDescriptors = [];
-let embeddedJsonFieldSyncTimer = null;
-let folderFilterDebounceTimer = null;
-let folderFilterToken = 0;
-const metadataFilterCache = new Map();
-const embeddedJsonPresenceCache = new Map();
-let licenseInventory = [];
-let licensesLoaded = false;
-let licensesGeneratedAt = 'unknown';
+import { state, IMAGE_EXTS, VIDEO_EXTS, AUDIO_EXTS, MEDIA_EXTS, THUMBNAIL_CONCURRENCY, evictCacheIfNeeded } from './state.js';
 
-const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp']);
-const VIDEO_EXTS = new Set(['mp4', 'mov', 'avi', 'mkv']);
-const AUDIO_EXTS = new Set(['mp3', 'wav', 'flac', 'ogg', 'm4a']);
-const MEDIA_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...AUDIO_EXTS]);
-const THUMBNAIL_CONCURRENCY = 2;
-
-let folderLoadToken = 0;
-let metadataLoadToken = 0;
-let thumbnailActiveCount = 0;
-let thumbnailQueue = [];
+const metadataFilterCache = state.metadataFilterCache;
+const embeddedJsonPresenceCache = state.embeddedJsonPresenceCache;
 
 // DOM Elements
 const openFolderBtn = document.getElementById('openFolderBtn');
@@ -47,6 +25,7 @@ const sortDirectionFilter = document.getElementById('sortDirectionFilter');
 const folderFilterStatus = document.getElementById('folderFilterStatus');
 const preview = document.getElementById('preview');
 const videoPreview = document.getElementById('videoPreview');
+const audioPreview = document.getElementById('audioPreview');
 const noPreview = document.getElementById('noPreview');
 const characterTextPanel = document.getElementById('characterTextPanel');
 const characterDescription = document.getElementById('characterDescription');
@@ -59,12 +38,10 @@ const embeddedJsonFormatFilter = document.getElementById('embeddedJsonFormatFilt
 const embeddedJsonTextFilter = document.getElementById('embeddedJsonTextFilter');
 const embeddedJsonSelect = document.getElementById('embeddedJsonSelect');
 const embeddedJsonPayloadLabel = document.getElementById('embeddedJsonPayloadLabel');
-const embeddedJsonBase64 = document.getElementById('embeddedJsonBase64');
-const embeddedJsonEditor = document.getElementById('embeddedJsonEditor');
+const embeddedJsonPayloadPreview = document.getElementById('embeddedJsonPayloadPreview');
+const embeddedJsonTree = document.getElementById('embeddedJsonTree');
 const saveEmbeddedJsonBtn = document.getElementById('saveEmbeddedJsonBtn');
 const embeddedJsonStatus = document.getElementById('embeddedJsonStatus');
-const embeddedJsonFieldsSection = document.getElementById('embeddedJsonFieldsSection');
-const embeddedJsonFieldsList = document.getElementById('embeddedJsonFieldsList');
 const jsonDiffModal = document.getElementById('jsonDiffModal');
 const jsonDiffSummary = document.getElementById('jsonDiffSummary');
 const jsonDiffOriginal = document.getElementById('jsonDiffOriginal');
@@ -99,7 +76,7 @@ const thumbnailObserver = new IntersectionObserver(
             const path = item.dataset.path;
             thumbnailObserver.unobserve(item);
             if (path) {
-                enqueueThumbnailLoad(item, path, folderLoadToken);
+                enqueueThumbnailLoad(item, path, state.folderLoadToken);
             }
         }
     },
@@ -108,6 +85,23 @@ const thumbnailObserver = new IntersectionObserver(
         rootMargin: '200px'
     }
 );
+
+function getExtension(filePath) {
+    const fileName = filePath.split(/[\\/]/).pop() || '';
+    const idx = fileName.lastIndexOf('.');
+    if (idx === -1) {
+        return '';
+    }
+    return fileName.slice(idx + 1).toLowerCase();
+}
+
+function fileKindByPath(filePath) {
+    const ext = getExtension(filePath);
+    if (IMAGE_EXTS.has(ext)) return 'image';
+    if (VIDEO_EXTS.has(ext)) return 'video';
+    if (AUDIO_EXTS.has(ext)) return 'audio';
+    return 'other';
+}
 
 // Open folder dialog
 openFolderBtn.addEventListener('click', async () => {
@@ -131,13 +125,13 @@ openFolderBtn.addEventListener('click', async () => {
 // Load directory files
 async function loadDirectory(dirPath) {
     try {
-        folderLoadToken += 1;
-        thumbnailQueue = [];
+        state.folderLoadToken += 1;
+        state.thumbnailQueue = [];
         metadataFilterCache.clear();
         embeddedJsonPresenceCache.clear();
 
         const files = await invoke('list_directory_files', { dirPath });
-        allFolderFiles = files;
+        state.allFolderFiles = files;
         folderPath.textContent = dirPath;
 
         await applyFolderFilters();
@@ -222,26 +216,26 @@ async function loadImageThumbnail(item, filePath) {
 }
 
 function enqueueThumbnailLoad(item, filePath, token) {
-    thumbnailQueue.push({ item, filePath, token });
+    state.thumbnailQueue.push({ item, filePath, token });
     drainThumbnailQueue();
 }
 
 function drainThumbnailQueue() {
-    while (thumbnailActiveCount < THUMBNAIL_CONCURRENCY && thumbnailQueue.length > 0) {
-        const job = thumbnailQueue.shift();
+    while (state.thumbnailActiveCount < THUMBNAIL_CONCURRENCY && state.thumbnailQueue.length > 0) {
+        const job = state.thumbnailQueue.shift();
         if (!job) {
             return;
         }
 
         // Skip stale jobs created for an older folder listing.
-        if (job.token !== folderLoadToken || !job.item.isConnected) {
+        if (job.token !== state.folderLoadToken || !job.item.isConnected) {
             continue;
         }
 
-        thumbnailActiveCount += 1;
+        state.thumbnailActiveCount += 1;
         loadImageThumbnail(job.item, job.filePath)
             .finally(() => {
-                thumbnailActiveCount -= 1;
+                state.thumbnailActiveCount -= 1;
                 drainThumbnailQueue();
             });
     }
@@ -254,20 +248,6 @@ function selectFileInList(filePath) {
         item.classList.add('selected');
         item.scrollIntoView({ block: 'nearest' });
     }
-}
-
-function fileKindByPath(filePath) {
-    const ext = getExtension(filePath);
-    if (IMAGE_EXTS.has(ext)) {
-        return 'image';
-    }
-    if (VIDEO_EXTS.has(ext)) {
-        return 'video';
-    }
-    if (AUDIO_EXTS.has(ext)) {
-        return 'audio';
-    }
-    return 'other';
 }
 
 async function getMetadataFilterData(filePath, options = {}) {
@@ -291,6 +271,7 @@ async function getMetadataFilterData(filePath, options = {}) {
         };
 
         metadataFilterCache.set(filePath, data);
+        evictCacheIfNeeded(metadataFilterCache);
         return data;
     } catch (_error) {
         const fallback = cached || {
@@ -302,6 +283,7 @@ async function getMetadataFilterData(filePath, options = {}) {
             resolution: null,
         };
         metadataFilterCache.set(filePath, fallback);
+        evictCacheIfNeeded(metadataFilterCache);
         return fallback;
     }
 }
@@ -312,17 +294,20 @@ async function hasEmbeddedJsonEntries(filePath) {
     }
 
     const ext = getExtension(filePath);
-    if (ext !== 'png' && ext !== 'mp3' && !VIDEO_EXTS.has(ext)) {
+    if (ext !== 'png' && ext !== 'mp3' && ext !== 'flac' && !VIDEO_EXTS.has(ext)) {
         embeddedJsonPresenceCache.set(filePath, false);
+        evictCacheIfNeeded(embeddedJsonPresenceCache);
         return false;
     }
 
     try {
         const hasAny = Boolean(await invoke('has_embedded_json', { filePath }));
         embeddedJsonPresenceCache.set(filePath, hasAny);
+        evictCacheIfNeeded(embeddedJsonPresenceCache);
         return hasAny;
     } catch (_error) {
         embeddedJsonPresenceCache.set(filePath, false);
+        evictCacheIfNeeded(embeddedJsonPresenceCache);
         return false;
     }
 }
@@ -333,7 +318,7 @@ async function filterWithAsyncPredicate(files, token, predicate, concurrency = 4
 
     async function worker() {
         while (nextIndex < files.length) {
-            if (token !== folderFilterToken) {
+            if (token !== state.folderFilterToken) {
                 return;
             }
 
@@ -361,15 +346,9 @@ function sortFiles(files, sortBy, sortDirection) {
     const byNumeric = (aValue, bValue) => {
         const aMissing = aValue == null;
         const bMissing = bValue == null;
-        if (aMissing && bMissing) {
-            return 0;
-        }
-        if (aMissing) {
-            return 1;
-        }
-        if (bMissing) {
-            return -1;
-        }
+        if (aMissing && bMissing) return 0;
+        if (aMissing) return 1;
+        if (bMissing) return -1;
         return aValue - bValue;
     };
 
@@ -400,10 +379,10 @@ function sortFiles(files, sortBy, sortDirection) {
 }
 
 async function applyFolderFilters() {
-    const token = ++folderFilterToken;
-    const previousSelected = selectedFile;
+    const token = ++state.folderFilterToken;
+    const previousSelected = state.selectedFile;
 
-    let filtered = [...allFolderFiles];
+    let filtered = [...state.allFolderFiles];
     const nameTerm = (fileNameFilter.value || '').trim().toLowerCase();
     const metadataTerm = (metadataWordFilter.value || '').trim().toLowerCase();
     const typeFilter = fileTypeFilter.value || 'all';
@@ -428,6 +407,13 @@ async function applyFolderFilters() {
         filtered = filtered.filter((filePath) => MEDIA_EXTS.has(getExtension(filePath)));
     }
 
+    const checkToken = () => {
+        if (token !== state.folderFilterToken) {
+            return true;
+        }
+        return false;
+    };
+
     const needsMetadata = metadataTerm.length > 0 || exifOnly || sortBy !== 'name';
 
     if (needsMetadata) {
@@ -441,7 +427,7 @@ async function applyFolderFilters() {
             },
             5
         );
-        if (token !== folderFilterToken) {
+        if (checkToken()) {
             return;
         }
     }
@@ -452,7 +438,7 @@ async function applyFolderFilters() {
             const data = await getMetadataFilterData(filePath, { includeExif: exifOnly });
             return data.searchBlob.includes(metadataTerm);
         });
-        if (token !== folderFilterToken) {
+        if (checkToken()) {
             return;
         }
     }
@@ -466,24 +452,24 @@ async function applyFolderFilters() {
         filtered = await filterWithAsyncPredicate(filtered, token, async (filePath) => {
             return hasEmbeddedJsonEntries(filePath);
         });
-        if (token !== folderFilterToken) {
+        if (checkToken()) {
             return;
         }
     }
 
     sortFiles(filtered, sortBy, sortDirection);
 
-    currentFiles = filtered;
+    state.currentFiles = filtered;
     renderFileList(filtered);
 
-    if (allFolderFiles.length === 0) {
+    if (state.allFolderFiles.length === 0) {
         folderFilterStatus.textContent = '';
     } else {
-        folderFilterStatus.textContent = `Showing ${filtered.length} of ${allFolderFiles.length} files`;
+        folderFilterStatus.textContent = `Showing ${filtered.length} of ${state.allFolderFiles.length} files`;
     }
 
     if (filtered.length === 0) {
-        selectedFile = null;
+        state.selectedFile = null;
         return;
     }
 
@@ -495,37 +481,13 @@ async function applyFolderFilters() {
 }
 
 function scheduleFolderFilterApply() {
-    if (folderFilterDebounceTimer !== null) {
-        clearTimeout(folderFilterDebounceTimer);
+    if (state.folderFilterDebounceTimer !== null) {
+        clearTimeout(state.folderFilterDebounceTimer);
     }
 
-    folderFilterDebounceTimer = window.setTimeout(() => {
+    state.folderFilterDebounceTimer = window.setTimeout(() => {
         applyFolderFilters();
     }, 220);
-}
-
-function initFolderFilters() {
-    if (
-        !fileNameFilter
-        || !fileTypeFilter
-        || !mediaOnlyToggle
-        || !metadataWordFilter
-        || !hasEmbeddedJsonOnly
-        || !hasExifOnly
-        || !sortByFilter
-        || !sortDirectionFilter
-    ) {
-        return;
-    }
-
-    fileNameFilter.addEventListener('input', scheduleFolderFilterApply);
-    metadataWordFilter.addEventListener('input', scheduleFolderFilterApply);
-    fileTypeFilter.addEventListener('change', () => applyFolderFilters());
-    mediaOnlyToggle.addEventListener('change', () => applyFolderFilters());
-    hasEmbeddedJsonOnly.addEventListener('change', () => applyFolderFilters());
-    hasExifOnly.addEventListener('change', () => applyFolderFilters());
-    sortByFilter.addEventListener('change', () => applyFolderFilters());
-    sortDirectionFilter.addEventListener('change', () => applyFolderFilters());
 }
 
 function spdxLicenseUrl(license) {
@@ -613,7 +575,7 @@ function applyLicensesFilters() {
     const search = (licensesSearchInput?.value || '').trim().toLowerCase();
     const ecosystem = licensesEcosystemFilter?.value || 'all';
 
-    const filtered = licenseInventory.filter((item) => {
+    const filtered = state.licenseInventory.filter((item) => {
         if (ecosystem !== 'all' && item.ecosystem !== ecosystem) {
             return false;
         }
@@ -627,11 +589,11 @@ function applyLicensesFilters() {
     });
 
     renderLicensesTable(filtered);
-    licensesMeta.textContent = `Showing ${filtered.length} of ${licenseInventory.length} dependencies.`;
+    licensesMeta.textContent = `Showing ${filtered.length} of ${state.licenseInventory.length} dependencies.`;
 }
 
 async function ensureLicensesLoaded() {
-    if (licensesLoaded) {
+    if (state.licensesLoaded) {
         return;
     }
 
@@ -641,17 +603,17 @@ async function ensureLicensesLoaded() {
     }
 
     const payload = await response.json();
-    licenseInventory = Array.isArray(payload.items) ? payload.items : [];
-    licensesGeneratedAt = payload.generatedAt || 'unknown';
-    licensesLoaded = true;
-    licensesMeta.textContent = `Generated ${payload.generatedAt || 'unknown'}. Found ${licenseInventory.length} dependencies.`;
+    state.licenseInventory = Array.isArray(payload.items) ? payload.items : [];
+    state.licensesGeneratedAt = payload.generatedAt || 'unknown';
+    state.licensesLoaded = true;
+    licensesMeta.textContent = `Generated ${payload.generatedAt || 'unknown'}. Found ${state.licenseInventory.length} dependencies.`;
 }
 
 function buildNoticesText() {
     const ecosystemCounts = new Map();
     const grouped = new Map();
 
-    for (const item of licenseInventory) {
+    for (const item of state.licenseInventory) {
         const ecosystem = item.ecosystem || 'unknown';
         const license = item.license || 'UNKNOWN';
         const key = `${ecosystem}::${license}`;
@@ -659,11 +621,7 @@ function buildNoticesText() {
         ecosystemCounts.set(ecosystem, (ecosystemCounts.get(ecosystem) || 0) + 1);
 
         if (!grouped.has(key)) {
-            grouped.set(key, {
-                ecosystem,
-                license,
-                items: []
-            });
+            grouped.set(key, { ecosystem, license, items: [] });
         }
 
         grouped.get(key).items.push(item);
@@ -673,8 +631,8 @@ function buildNoticesText() {
     lines.push('CharBrowser Third-Party Notices');
     lines.push('=================================');
     lines.push('');
-    lines.push(`Generated: ${licensesGeneratedAt}`);
-    lines.push(`Total dependencies: ${licenseInventory.length}`);
+    lines.push(`Generated: ${state.licensesGeneratedAt}`);
+    lines.push(`Total dependencies: ${state.licenseInventory.length}`);
     lines.push('');
 
     const ecosystems = [...ecosystemCounts.keys()].sort((a, b) => a.localeCompare(b));
@@ -707,8 +665,32 @@ function buildNoticesText() {
     return lines.join('\n');
 }
 
+function initFolderFilters() {
+    if (
+        !fileNameFilter
+        || !fileTypeFilter
+        || !mediaOnlyToggle
+        || !metadataWordFilter
+        || !hasEmbeddedJsonOnly
+        || !hasExifOnly
+        || !sortByFilter
+        || !sortDirectionFilter
+    ) {
+        return;
+    }
+
+    fileNameFilter.addEventListener('input', scheduleFolderFilterApply);
+    metadataWordFilter.addEventListener('input', scheduleFolderFilterApply);
+    fileTypeFilter.addEventListener('change', () => applyFolderFilters());
+    mediaOnlyToggle.addEventListener('change', () => applyFolderFilters());
+    hasEmbeddedJsonOnly.addEventListener('change', () => applyFolderFilters());
+    hasExifOnly.addEventListener('change', () => applyFolderFilters());
+    sortByFilter.addEventListener('change', () => applyFolderFilters());
+    sortDirectionFilter.addEventListener('change', () => applyFolderFilters());
+}
+
 async function openNoticesInViewer() {
-    await ensureLicensesLoaded();
+    await ensureLicensesLoaded(licensesMeta);
     showDocumentViewer('Third-Party Notices', buildNoticesText());
 }
 
@@ -757,8 +739,8 @@ function initLicensesModal() {
         licensesMeta.textContent = 'Loading license inventory...';
 
         try {
-            await ensureLicensesLoaded();
-            applyLicensesFilters();
+            await ensureLicensesLoaded(licensesMeta);
+            applyLicensesFilters(licensesSearchInput, licensesEcosystemFilter, licensesMeta, licensesTableBody);
         } catch (error) {
             licensesMeta.textContent = `Failed to load licenses: ${String(error)}`;
             renderLicensesTable([]);
@@ -798,8 +780,8 @@ function initLicensesModal() {
         }
     });
 
-    licensesSearchInput?.addEventListener('input', () => applyLicensesFilters());
-    licensesEcosystemFilter?.addEventListener('change', () => applyLicensesFilters());
+    licensesSearchInput?.addEventListener('input', () => applyLicensesFilters(licensesSearchInput, licensesEcosystemFilter, licensesMeta, licensesTableBody));
+    licensesEcosystemFilter?.addEventListener('change', () => applyLicensesFilters(licensesSearchInput, licensesEcosystemFilter, licensesMeta, licensesTableBody));
 }
 
 function isTextEditingContext() {
@@ -808,27 +790,31 @@ function isTextEditingContext() {
         return false;
     }
 
-    if (active === embeddedJsonEditor || active === embeddedJsonBase64 || active === embeddedJsonTextFilter) {
+    if (active === embeddedJsonTextFilter) {
+        return true;
+    }
+
+    if (active.isContentEditable) {
         return true;
     }
 
     const tag = active.tagName;
-    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active.isContentEditable;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
 
 function selectFileByOffset(offset) {
-    if (!Array.isArray(currentFiles) || currentFiles.length === 0) {
+    if (!Array.isArray(state.currentFiles) || state.currentFiles.length === 0) {
         return;
     }
 
-    let index = currentFiles.indexOf(selectedFile);
+    let index = state.currentFiles.indexOf(state.selectedFile);
     if (index === -1) {
         index = offset > 0 ? -1 : 0;
     }
 
-    const nextIndex = Math.min(currentFiles.length - 1, Math.max(0, index + offset));
-    const nextFile = currentFiles[nextIndex];
-    if (!nextFile || nextFile === selectedFile) {
+    const nextIndex = Math.min(state.currentFiles.length - 1, Math.max(0, index + offset));
+    const nextFile = state.currentFiles[nextIndex];
+    if (!nextFile || nextFile === state.selectedFile) {
         return;
     }
 
@@ -939,16 +925,6 @@ function initResizableLayout() {
     metadataSplitter.addEventListener('pointercancel', stopMetadataDrag);
 }
 
-function getExtension(filePath) {
-    const fileName = filePath.split(/[\\/]/).pop() || '';
-    const idx = fileName.lastIndexOf('.');
-    if (idx === -1) {
-        return '';
-    }
-
-    return fileName.slice(idx + 1).toLowerCase();
-}
-
 // Create file icon based on extension
 function createFileIcon(ext) {
     const icon = document.createElement('div');
@@ -972,11 +948,11 @@ function createFileIcon(ext) {
 
 // Load and display file metadata
 async function loadFileMetadata(filePath) {
-    const requestToken = ++metadataLoadToken;
+    const requestToken = ++state.metadataLoadToken;
     try {
-        selectedFile = filePath;
+        state.selectedFile = filePath;
         const metadata = await invoke('get_file_metadata', { filePath });
-        if (requestToken !== metadataLoadToken || selectedFile !== filePath) {
+        if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
             return;
         }
 
@@ -987,7 +963,7 @@ async function loadFileMetadata(filePath) {
         metadataView.style.display = 'flex';
 
         await updatePreview(filePath, ext, requestToken);
-        if (requestToken !== metadataLoadToken || selectedFile !== filePath) {
+        if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
             return;
         }
         
@@ -1000,25 +976,26 @@ async function loadFileMetadata(filePath) {
 }
 
 async function loadEmbeddedBase64Json(filePath, ext) {
-    embeddedJsonEntries = [];
-    filteredEmbeddedJsonEntries = [];
+    state.embeddedJsonEntries = [];
+    state.filteredEmbeddedJsonEntries = [];
     embeddedJsonSection.style.display = 'none';
     embeddedJsonSelect.innerHTML = '';
     embeddedJsonPayloadLabel.textContent = 'Payload';
-    embeddedJsonBase64.value = '';
-    embeddedJsonEditor.value = '';
+    embeddedJsonPayloadPreview.textContent = '';
+    embeddedJsonTree.innerHTML = '';
+    currentEditableJson = null;
     embeddedJsonStatus.textContent = '';
     embeddedJsonFormatFilter.value = 'all';
     embeddedJsonTextFilter.value = '';
     updateCharacterTextPanel(null, null);
 
-    if (ext !== 'png' && ext !== 'mp3' && !VIDEO_EXTS.has(ext)) {
+    if (ext !== 'png' && ext !== 'mp3' && ext !== 'flac' && !VIDEO_EXTS.has(ext)) {
         return;
     }
 
     try {
         const entries = await invoke('get_embedded_base64_json_entries', { filePath });
-        if (selectedFile !== filePath) {
+        if (state.selectedFile !== filePath) {
             return;
         }
 
@@ -1028,7 +1005,7 @@ async function loadEmbeddedBase64Json(filePath, ext) {
             return;
         }
 
-        embeddedJsonEntries = entries;
+        state.embeddedJsonEntries = entries;
         const narrative = extractNarrativeFieldsFromEntries(entries);
         updateCharacterTextPanel(narrative.description, narrative.firstMes);
         embeddedJsonSection.style.display = 'flex';
@@ -1043,7 +1020,7 @@ function applyEmbeddedJsonFilters() {
     const formatFilter = embeddedJsonFormatFilter.value || 'all';
     const textFilter = (embeddedJsonTextFilter.value || '').trim().toLowerCase();
 
-    filteredEmbeddedJsonEntries = embeddedJsonEntries.filter((entry) => {
+    state.filteredEmbeddedJsonEntries = state.embeddedJsonEntries.filter((entry) => {
         if (formatFilter !== 'all' && (entry.payload_format || 'base64') !== formatFilter) {
             return false;
         }
@@ -1059,188 +1036,226 @@ function applyEmbeddedJsonFilters() {
     const previouslySelected = Number(embeddedJsonSelect.value);
     embeddedJsonSelect.innerHTML = '';
 
-    for (const entry of filteredEmbeddedJsonEntries) {
+    for (const entry of state.filteredEmbeddedJsonEntries) {
         const option = document.createElement('option');
         option.value = String(entry.id);
         option.textContent = `${entry.chunk_type} - ${entry.label} [${entry.payload_format || 'base64'}]`;
         embeddedJsonSelect.appendChild(option);
     }
 
-    if (filteredEmbeddedJsonEntries.length === 0) {
+    if (state.filteredEmbeddedJsonEntries.length === 0) {
         embeddedJsonPayloadLabel.textContent = 'Payload';
-        embeddedJsonBase64.value = '';
-        embeddedJsonEditor.value = '';
-        embeddedJsonFieldsSection.style.display = 'none';
-        embeddedJsonFieldsList.innerHTML = '';
+        embeddedJsonPayloadPreview.textContent = '';
+        embeddedJsonTree.innerHTML = '';
+        currentEditableJson = null;
         embeddedJsonStatus.textContent = 'No embedded JSON entries match the current filters.';
         return;
     }
 
-    const selectedStillVisible = filteredEmbeddedJsonEntries.some((e) => e.id === previouslySelected);
-    const selectedId = selectedStillVisible ? previouslySelected : filteredEmbeddedJsonEntries[0].id;
+    const selectedStillVisible = state.filteredEmbeddedJsonEntries.some((e) => e.id === previouslySelected);
+    const selectedId = selectedStillVisible ? previouslySelected : state.filteredEmbeddedJsonEntries[0].id;
     embeddedJsonSelect.value = String(selectedId);
     renderEmbeddedJsonEntry(selectedId);
     embeddedJsonStatus.textContent = '';
 }
 
+let currentEditableJson = null;
+
 function renderEmbeddedJsonEntry(entryIdRaw) {
     const entryId = Number(entryIdRaw);
-    const entry = embeddedJsonEntries.find((item) => item.id === entryId);
+    const entry = state.embeddedJsonEntries.find((item) => item.id === entryId);
     if (!entry) {
-        embeddedJsonBase64.value = '';
-        embeddedJsonEditor.value = '';
-        embeddedJsonFieldsSection.style.display = 'none';
-        embeddedJsonFieldsList.innerHTML = '';
-        embeddedJsonFieldDescriptors = [];
+        embeddedJsonPayloadPreview.textContent = '';
+        embeddedJsonTree.innerHTML = '';
+        currentEditableJson = null;
         return;
     }
 
     const payloadText = entry.payload ?? entry.base64;
-    embeddedJsonBase64.value = payloadText;
-    embeddedJsonPayloadLabel.textContent = `Payload (${entry.payload_format || 'base64'})`;
-    embeddedJsonEditor.value = entry.decoded_json;
-    refreshDetectedTextFields(entry.decoded_json);
-}
+    embeddedJsonPayloadPreview.textContent = payloadText.slice(0, 200) + (payloadText.length > 200 ? '...' : '');
+    embeddedJsonPayloadLabel.textContent = `Payload (${entry.payload_format || 'base64'}) - ${payloadText.length} chars`;
 
-function refreshDetectedTextFields(jsonText) {
-    let parsed;
     try {
-        parsed = JSON.parse(jsonText);
-    } catch {
-        embeddedJsonFieldsSection.style.display = 'none';
-        embeddedJsonFieldsList.innerHTML = '';
-        embeddedJsonFieldDescriptors = [];
-        return;
-    }
-
-    embeddedJsonFieldDescriptors = extractMeaningfulTextFields(parsed);
-    embeddedJsonFieldsList.innerHTML = '';
-
-    if (embeddedJsonFieldDescriptors.length === 0) {
-        embeddedJsonFieldsSection.style.display = 'none';
-        return;
-    }
-
-    embeddedJsonFieldsSection.style.display = 'flex';
-    const fragment = document.createDocumentFragment();
-
-    embeddedJsonFieldDescriptors.forEach((field, index) => {
-        const item = document.createElement('div');
-        item.className = 'embedded-json-field-item';
-
-        const label = document.createElement('div');
-        label.className = 'embedded-json-field-label';
-        label.textContent = field.path;
-
-        const textarea = document.createElement('textarea');
-        textarea.className = 'embedded-json-field-text';
-        textarea.value = field.value;
-        textarea.dataset.fieldIndex = String(index);
-
-        textarea.addEventListener('input', (event) => {
-            const target = event.target;
-            const descriptor = embeddedJsonFieldDescriptors[Number(target.dataset.fieldIndex)];
-            if (!descriptor) {
-                return;
-            }
-
-            try {
-                const parsedCurrent = JSON.parse(embeddedJsonEditor.value);
-                setByPathTokens(parsedCurrent, descriptor.tokens, target.value);
-                embeddedJsonEditor.value = JSON.stringify(parsedCurrent, null, 2);
-                embeddedJsonStatus.textContent = '';
-            } catch {
-                embeddedJsonStatus.textContent = 'Cannot sync field edits until JSON is valid.';
-            }
-        });
-
-        item.appendChild(label);
-        item.appendChild(textarea);
-        fragment.appendChild(item);
-    });
-
-    embeddedJsonFieldsList.appendChild(fragment);
-}
-
-function extractMeaningfulTextFields(root) {
-    const fields = [];
-    walkJson(root, [], fields);
-    return fields;
-}
-
-function walkJson(value, tokens, out) {
-    if (typeof value === 'string') {
-        const path = tokensToPath(tokens);
-        if (isMeaningfulTextField(path, value)) {
-            out.push({ path, tokens: [...tokens], value });
-        }
-        return;
-    }
-
-    if (Array.isArray(value)) {
-        value.forEach((item, index) => walkJson(item, [...tokens, index], out));
-        return;
-    }
-
-    if (value && typeof value === 'object') {
-        for (const [key, child] of Object.entries(value)) {
-            walkJson(child, [...tokens, key], out);
-        }
+        currentEditableJson = JSON.parse(entry.decoded_json);
+        embeddedJsonTree.innerHTML = '';
+        const treeNode = buildJsonTreeNode(currentEditableJson, null);
+        embeddedJsonTree.appendChild(treeNode);
+    } catch (e) {
+        embeddedJsonTree.innerHTML = `<div style="color: #ff6b6b;">Invalid JSON: ${e.message}</div>`;
+        currentEditableJson = null;
     }
 }
 
-function tokensToPath(tokens) {
-    let path = '';
-    for (const token of tokens) {
-        if (typeof token === 'number') {
-            path += `[${token}]`;
-        } else if (path.length === 0) {
-            path = token;
+function buildJsonTreeNode(value, key) {
+    const node = document.createElement('div');
+    node.className = 'json-tree-node';
+
+    const row = document.createElement('div');
+    row.className = 'json-tree-row';
+
+    if (key !== null) {
+        const toggle = document.createElement('span');
+        toggle.className = 'json-tree-toggle';
+
+        const keySpan = document.createElement('span');
+        keySpan.className = 'json-tree-key';
+        keySpan.textContent = typeof key === 'number' ? `[${key}]` : `"${key}"`;
+
+        const colon = document.createElement('span');
+        colon.className = 'json-tree-colon';
+        colon.textContent = ': ';
+
+        if (value !== null && typeof value === 'object') {
+            const isEmpty = Array.isArray(value) ? value.length === 0 : Object.keys(value).length === 0;
+            toggle.textContent = isEmpty ? (Array.isArray(value) ? '[]' : '{}') : (Array.isArray(value) ? '▼' : '▼');
+            toggle.addEventListener('click', () => {
+                const children = node.querySelector(':scope > .json-tree-children');
+                if (children) {
+                    children.classList.toggle('expanded');
+                    toggle.textContent = children.classList.contains('expanded')
+                        ? (Array.isArray(value) ? '▼' : '▼')
+                        : (Array.isArray(value) ? '▶' : '▶');
+                }
+            });
+            row.appendChild(toggle);
+            row.appendChild(keySpan);
+            row.appendChild(colon);
+
+            const valueSpan = document.createElement('span');
+            valueSpan.className = `json-tree-value ${Array.isArray(value) ? 'array' : 'object'}`;
+            valueSpan.textContent = Array.isArray(value)
+                ? `[${value.length}]`
+                : `{${Object.keys(value).length}}`;
+            row.appendChild(valueSpan);
         } else {
-            path += `.${token}`;
+            toggle.textContent = ' ';
+            row.appendChild(toggle);
+            row.appendChild(keySpan);
+            row.appendChild(colon);
+
+            const valueSpan = document.createElement('span');
+            const isEditable = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+            valueSpan.className = `json-tree-value ${typeof value}`;
+            if (isEditable) {
+                valueSpan.classList.add('editable');
+                valueSpan.contentEditable = 'true';
+                valueSpan.textContent = formatJsonValue(value);
+                valueSpan.spellcheck = false;
+
+                valueSpan.addEventListener('blur', () => syncTreeToJson(node, key, valueSpan));
+                valueSpan.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        valueSpan.blur();
+                    }
+                    if (e.key === 'Escape') {
+                        valueSpan.textContent = formatJsonValue(value);
+                        valueSpan.blur();
+                    }
+                });
+            } else if (value === null) {
+                valueSpan.textContent = 'null';
+            }
+            row.appendChild(valueSpan);
         }
+    } else {
+        row.appendChild(document.createTextNode(''));
     }
-    return path || 'value';
+
+    node.appendChild(row);
+
+    if (value !== null && typeof value === 'object' && Object.keys(value).length > 0) {
+        const children = document.createElement('div');
+        children.className = 'json-tree-children expanded';
+
+        if (Array.isArray(value)) {
+            value.forEach((item, index) => {
+                children.appendChild(buildJsonTreeNode(item, index));
+            });
+        } else {
+            Object.entries(value).forEach(([k, v]) => {
+                children.appendChild(buildJsonTreeNode(v, k));
+            });
+        }
+
+        const lastRow = children.lastElementChild;
+        if (lastRow) {
+            const comma = document.createElement('span');
+            comma.className = 'json-tree-comma';
+            comma.textContent = ',';
+            lastRow.querySelector('.json-tree-row').appendChild(comma);
+        }
+
+        node.appendChild(children);
+    }
+
+    return node;
 }
 
-function isMeaningfulTextField(path, value) {
-    const trimmed = value.trim();
-    if (trimmed.length === 0) {
-        return false;
+function formatJsonValue(value) {
+    if (typeof value === 'string') {
+        return value;
     }
-
-    const pathLower = path.toLowerCase();
-    const importantKeys = [
-        'first_mes',
-        'description',
-        'creatorcomment',
-        'creator_notes',
-        'scenario',
-        'personality',
-        'mes_example',
-        'system_prompt',
-        'post_history_instructions',
-        'alternate_greetings',
-    ];
-
-    if (importantKeys.some((k) => pathLower.endsWith(k) || pathLower.includes(`.${k}`))) {
-        return true;
+    if (value === null) {
+        return 'null';
     }
-
-    // Catch additional narrative fields that follow the same pattern.
-    if (trimmed.length >= 80 && /[a-zA-Z]/.test(trimmed) && /\s/.test(trimmed)) {
-        return true;
-    }
-
-    return false;
+    return String(value);
 }
 
-function setByPathTokens(target, tokens, value) {
-    let node = target;
-    for (let i = 0; i < tokens.length - 1; i++) {
-        node = node[tokens[i]];
+function syncTreeToJson(node, key, valueSpan) {
+    if (!currentEditableJson) return;
+
+    try {
+        let parsedValue = valueSpan.textContent;
+        if (parsedValue === 'null') {
+            parsedValue = null;
+        } else if (parsedValue === 'true') {
+            parsedValue = true;
+        } else if (parsedValue === 'false') {
+            parsedValue = false;
+        } else if (!isNaN(parsedValue) && parsedValue.trim() !== '') {
+            parsedValue = Number(parsedValue);
+        }
+
+        setNestedValue(currentEditableJson, node, key, parsedValue);
+        valueSpan.classList.remove('error');
+        embeddedJsonStatus.textContent = '';
+    } catch (e) {
+        valueSpan.classList.add('error');
+        embeddedJsonStatus.textContent = `Parse error: ${e.message}`;
     }
-    node[tokens[tokens.length - 1]] = value;
+}
+
+function setNestedValue(obj, node, key, value) {
+    const path = [];
+    let current = node;
+
+    while (current && current.classList.contains('json-tree-node')) {
+        const row = current.querySelector(':scope > .json-tree-row');
+        if (!row) break;
+
+        const keyEl = row.querySelector('.json-tree-key');
+        if (keyEl) {
+            const keyText = keyEl.textContent;
+            if (keyText.startsWith('[')) {
+                path.unshift(parseInt(keyText.slice(1, -1), 10));
+            } else {
+                path.unshift(keyText.slice(1, -1));
+            }
+        }
+
+        current = current.parentElement?.closest('.json-tree-node');
+    }
+
+    let target = obj;
+    for (let i = 0; i < path.length - 1; i++) {
+        target = target[path[i]];
+    }
+    target[path.length > 0 ? path[path.length - 1] : key] = value;
+}
+
+function getJsonFromTree() {
+    return currentEditableJson;
 }
 
 embeddedJsonSelect.addEventListener('change', () => {
@@ -1256,45 +1271,35 @@ embeddedJsonTextFilter.addEventListener('input', () => {
     applyEmbeddedJsonFilters();
 });
 
-embeddedJsonEditor.addEventListener('input', () => {
-    if (embeddedJsonFieldSyncTimer !== null) {
-        clearTimeout(embeddedJsonFieldSyncTimer);
-    }
-
-    embeddedJsonFieldSyncTimer = window.setTimeout(() => {
-        refreshDetectedTextFields(embeddedJsonEditor.value);
-    }, 250);
-});
-
 saveEmbeddedJsonBtn.addEventListener('click', async () => {
-    if (!selectedFile || embeddedJsonEntries.length === 0) {
+    if (!state.selectedFile || state.embeddedJsonEntries.length === 0) {
         return;
     }
 
     const entryId = Number(embeddedJsonSelect.value);
-    const jsonText = embeddedJsonEditor.value;
+    const jsonObj = getJsonFromTree();
     embeddedJsonStatus.textContent = '';
 
-    try {
-        JSON.parse(jsonText);
-    } catch (error) {
-        embeddedJsonStatus.textContent = `Invalid JSON: ${String(error)}`;
+    if (!jsonObj) {
+        embeddedJsonStatus.textContent = 'Cannot save: invalid JSON in tree view.';
         return;
     }
 
+    const jsonText = JSON.stringify(jsonObj, null, 2);
+
     try {
-        const entry = embeddedJsonEntries.find((item) => item.id === entryId);
+        const entry = state.embeddedJsonEntries.find((item) => item.id === entryId);
         if (!entry) {
             embeddedJsonStatus.textContent = 'Selected entry not found.';
             return;
         }
 
         const prettyOriginal = normalizeJsonText(entry.decoded_json);
-        const prettyEdited = normalizeJsonText(jsonText);
+        const prettyEdited = jsonText;
         const summary = buildJsonDiffSummary(prettyOriginal, prettyEdited);
 
-        pendingEmbeddedJsonSave = {
-            filePath: selectedFile,
+        state.pendingEmbeddedJsonSave = {
+            filePath: state.selectedFile,
             entryId,
             jsonText: prettyEdited,
         };
@@ -1309,13 +1314,13 @@ saveEmbeddedJsonBtn.addEventListener('click', async () => {
 });
 
 confirmJsonSaveBtn.addEventListener('click', async () => {
-    if (!pendingEmbeddedJsonSave) {
+    if (!state.pendingEmbeddedJsonSave) {
         jsonDiffModal.style.display = 'none';
         return;
     }
 
-    const payload = pendingEmbeddedJsonSave;
-    pendingEmbeddedJsonSave = null;
+    const payload = state.pendingEmbeddedJsonSave;
+    state.pendingEmbeddedJsonSave = null;
     jsonDiffModal.style.display = 'none';
 
     try {
@@ -1328,7 +1333,7 @@ confirmJsonSaveBtn.addEventListener('click', async () => {
 });
 
 cancelJsonSaveBtn.addEventListener('click', () => {
-    pendingEmbeddedJsonSave = null;
+    state.pendingEmbeddedJsonSave = null;
     jsonDiffModal.style.display = 'none';
     embeddedJsonStatus.textContent = 'Save canceled.';
 });
@@ -1520,26 +1525,29 @@ function waitForVideoReady(videoElement, timeoutMs = 5000) {
 }
 
 async function updatePreview(filePath, ext, requestToken) {
-    if (requestToken !== metadataLoadToken || selectedFile !== filePath) {
+    if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
         return;
     }
 
     preview.style.display = 'none';
+    preview.removeAttribute('src');
     videoPreview.style.display = 'none';
     videoPreview.pause();
     videoPreview.removeAttribute('src');
     videoPreview.load();
+    audioPreview.style.display = 'none';
+    audioPreview.pause();
+    audioPreview.removeAttribute('src');
     noPreview.textContent = 'No preview available';
     noPreview.style.display = 'none';
 
     if (IMAGE_EXTS.has(ext)) {
         try {
-            // Use backend resizing for very large files to keep UI responsive.
             const largePreview = await invoke('get_thumbnail', {
                 filePath,
                 maxSize: 1600
             });
-            if (requestToken !== metadataLoadToken || selectedFile !== filePath) {
+            if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
                 return;
             }
             preview.src = largePreview;
@@ -1556,7 +1564,7 @@ async function updatePreview(filePath, ext, requestToken) {
                 filePath,
                 maxBytes: 80 * 1024 * 1024,
             });
-            if (requestToken !== metadataLoadToken || selectedFile !== filePath) {
+            if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
                 return;
             }
 
@@ -1565,7 +1573,7 @@ async function updatePreview(filePath, ext, requestToken) {
             videoPreview.load();
 
             const isReady = await waitForVideoReady(videoPreview, 5000);
-            if (requestToken !== metadataLoadToken || selectedFile !== filePath) {
+            if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
                 return;
             }
 
@@ -1576,7 +1584,7 @@ async function updatePreview(filePath, ext, requestToken) {
                 noPreview.style.display = 'block';
             }
         } catch (error) {
-            if (requestToken !== metadataLoadToken || selectedFile !== filePath) {
+            if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
                 return;
             }
 
@@ -1589,20 +1597,45 @@ async function updatePreview(filePath, ext, requestToken) {
     }
 
     if (AUDIO_EXTS.has(ext)) {
+        let audioLoaded = false;
+
+        try {
+            const audioSrc = await invoke('get_audio_data_url', {
+                filePath,
+                maxBytes: 80 * 1024 * 1024,
+            });
+            if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
+                return;
+            }
+            audioPreview.src = audioSrc;
+            audioPreview.style.display = 'block';
+            audioPreview.load();
+            audioLoaded = true;
+        } catch (error) {
+            audioPreview.style.display = 'none';
+            audioPreview.removeAttribute('src');
+        }
+
         try {
             const cover = await invoke('get_audio_cover', {
                 filePath,
                 maxSize: 1200
             });
-            if (requestToken !== metadataLoadToken || selectedFile !== filePath) {
+            if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
                 return;
             }
             preview.src = cover;
             preview.style.display = 'block';
-            return;
-        } catch (_error) {
-            // Fall through to "No preview" text when no embedded art exists.
+        } catch (error) {
+            preview.style.display = 'none';
+            preview.removeAttribute('src');
         }
+
+        if (!audioLoaded) {
+            noPreview.textContent = 'No audio preview available';
+            noPreview.style.display = 'block';
+        }
+        return;
     }
 
     noPreview.style.display = 'block';
@@ -1611,7 +1644,7 @@ async function updatePreview(filePath, ext, requestToken) {
 // Display metadata in the panel
 function displayMetadata(metadata) {
     metadataContent.innerHTML = '';
-    const selectedExt = selectedFile ? getExtension(selectedFile) : '';
+    const selectedExt = state.selectedFile ? getExtension(state.selectedFile) : '';
     
     // Basic information
     addMetadataRow('File Name', metadata.file_name);

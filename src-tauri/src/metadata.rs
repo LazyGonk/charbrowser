@@ -1,12 +1,77 @@
+use id3::frame::{Comment, Content, ExtendedText, Frame, Lyrics};
+use id3::TagLike;
+use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
-use image::GenericImageView;
-use id3::TagLike;
-use id3::frame::{Comment, Content, ExtendedText, Frame, Lyrics};
-use std::str;
 use std::io::{BufReader, Read};
+use std::path::Path;
+use std::str;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+const MIN_BASE64_TOKEN_LEN: usize = 24;
+const VIDEO_ATOM_MAX_SIZE: usize = 8 * 1024 * 1024;
+const VIDEO_PREVIEW_MAX_SIZE: usize = 80 * 1024 * 1024;
+const SYNCHSAFE_MASK: u32 = 0x07FFFFFF;
+const SYNCHSAFE_BYTE_MASK: u32 = 0x7F;
+
+struct FlacBlock<'a> {
+    block_type: u8,
+    data: &'a [u8],
+}
+
+fn synchsafe_to_u32(bytes: &[u8]) -> u32 {
+    if bytes.len() < 4 {
+        return 0;
+    }
+    ((bytes[0] as u32) << 21)
+        | ((bytes[1] as u32) << 14)
+        | ((bytes[2] as u32) << 7)
+        | (bytes[3] as u32)
+}
+
+fn synchsafe_24_to_u32(bytes: &[u8]) -> u32 {
+    if bytes.len() < 3 {
+        return 0;
+    }
+    ((bytes[0] as u32) << 14) | ((bytes[1] as u32) << 7) | (bytes[2] as u32)
+}
+
+fn iter_flac_blocks<'a>(bytes: &'a [u8], start_offset: usize) -> FlacBlockIterator<'a> {
+    FlacBlockIterator {
+        bytes,
+        pos: start_offset,
+    }
+}
+
+struct FlacBlockIterator<'a> {
+    bytes: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> Iterator for FlacBlockIterator<'a> {
+    type Item = FlacBlock<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos + 4 > self.bytes.len() {
+            return None;
+        }
+        let block_header = &self.bytes[self.pos..self.pos + 4];
+        let block_type = (block_header[0] >> 6) as u8;
+        let block_len = synchsafe_24_to_u32(&block_header[1..4]) as usize;
+
+        let data_start = self.pos + 4;
+        let data_end = data_start + block_len;
+
+        if data_end > self.bytes.len() {
+            return None;
+        }
+
+        let data = &self.bytes[data_start..data_end];
+        self.pos = data_end;
+
+        Some(FlacBlock { block_type, data })
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EmbeddedJsonEntry {
@@ -87,6 +152,14 @@ enum Mp3FrameKind {
     Lyrics { lang: String, description: String },
 }
 
+struct FlacJsonMatch {
+    id: usize,
+    label: String,
+    payload: String,
+    decoded_json: serde_json::Value,
+    encoding: JsonPayloadEncoding,
+}
+
 enum JsonPayloadEncoding {
     Base64(Base64Encoding),
     PlainText,
@@ -128,8 +201,8 @@ pub fn extract_metadata(path: &Path) -> Result<FileMetadata, String> {
         return Err("File does not exist".to_string());
     }
 
-    let metadata = fs::metadata(path)
-        .map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    let metadata =
+        fs::metadata(path).map_err(|e| format!("Failed to read file metadata: {}", e))?;
 
     let file_name = path
         .file_name()
@@ -137,10 +210,7 @@ pub fn extract_metadata(path: &Path) -> Result<FileMetadata, String> {
         .unwrap_or("Unknown")
         .to_string();
 
-    let file_path = path
-        .to_str()
-        .unwrap_or("Unknown")
-        .to_string();
+    let file_path = path.to_str().unwrap_or("Unknown").to_string();
 
     let file_size = metadata.len();
     let modified_timestamp = metadata
@@ -162,9 +232,10 @@ pub fn extract_metadata(path: &Path) -> Result<FileMetadata, String> {
         "mp4" | "mov" | "avi" | "mkv" => {
             extract_video_metadata(path, file_name, file_path, file_size, modified_timestamp)
         }
-        "mp3" | "flac" | "ogg" | "m4a" => {
+        "mp3" | "ogg" | "m4a" => {
             extract_audio_metadata(path, file_name, file_path, file_size, modified_timestamp)
         }
+        "flac" => extract_flac_metadata(path, file_name, file_path, file_size, modified_timestamp),
         "wav" => extract_wav_metadata(path, file_name, file_path, file_size, modified_timestamp),
         _ => Ok(FileMetadata {
             file_name,
@@ -188,18 +259,15 @@ pub fn extract_filter_info(path: &Path, include_exif: bool) -> Result<FileFilter
         return Err("File does not exist".to_string());
     }
 
-    let metadata = fs::metadata(path)
-        .map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    let metadata =
+        fs::metadata(path).map_err(|e| format!("Failed to read file metadata: {}", e))?;
 
     let file_name = path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("Unknown")
         .to_string();
-    let file_path = path
-        .to_str()
-        .unwrap_or("Unknown")
-        .to_string();
+    let file_path = path.to_str().unwrap_or("Unknown").to_string();
     let file_size = metadata.len();
     let modified_timestamp = metadata
         .modified()
@@ -219,7 +287,10 @@ pub fn extract_filter_info(path: &Path, include_exif: bool) -> Result<FileFilter
     let mut has_exif = None;
     let mut search_parts = vec![file_name.clone(), file_path.clone()];
 
-    let file_kind = if matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp") {
+    let file_kind = if matches!(
+        extension.as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp"
+    ) {
         if let Ok((w, h)) = image::image_dimensions(path) {
             width = Some(w);
             height = Some(h);
@@ -291,9 +362,14 @@ pub fn file_has_embedded_json(file_path: &str) -> Result<bool, String> {
         return png_has_embedded_json(&chunks);
     }
 
+    if ext == "flac" {
+        let bytes = fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
+        return flac_has_embedded_json(&bytes);
+    }
+
     if ext == "mp3" {
-        let tag = id3::Tag::read_from_path(path)
-            .map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+        let tag =
+            id3::Tag::read_from_path(path).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
         if mp3_tag_has_embedded_json(&tag) {
             return Ok(true);
         }
@@ -322,8 +398,7 @@ fn extract_image_metadata(
     file_size: u64,
     modified_timestamp: Option<i64>,
 ) -> Result<FileMetadata, String> {
-    let img = image::open(path)
-        .map_err(|e| format!("Failed to open image: {}", e))?;
+    let img = image::open(path).map_err(|e| format!("Failed to open image: {}", e))?;
 
     let (width, height) = img.dimensions();
     let color_type = format!("{:?}", img.color());
@@ -383,21 +458,33 @@ fn extract_exif_metadata(path: &Path) -> Option<serde_json::Value> {
 }
 
 fn extract_png_chunks(path: &Path) -> Result<serde_json::Value, String> {
-    let file = fs::File::open(path)
-        .map_err(|e| format!("Failed to open PNG file: {}", e))?;
-    
+    let file = fs::File::open(path).map_err(|e| format!("Failed to open PNG file: {}", e))?;
+
     let decoder = png::Decoder::new(file);
-    let reader = decoder.read_info()
+    let reader = decoder
+        .read_info()
         .map_err(|e| format!("Failed to read PNG info: {}", e))?;
-    
+
     let info = reader.info();
-    
+
     let mut chunks = serde_json::Map::new();
-    chunks.insert("bit_depth".to_string(), serde_json::json!(info.bit_depth as u8));
-    chunks.insert("color_type".to_string(), serde_json::json!(format!("{:?}", info.color_type)));
-    chunks.insert("compression".to_string(), serde_json::json!(format!("{:?}", info.compression)));
-    chunks.insert("interlaced".to_string(), serde_json::json!(format!("{:?}", info.interlaced)));
-    
+    chunks.insert(
+        "bit_depth".to_string(),
+        serde_json::json!(info.bit_depth as u8),
+    );
+    chunks.insert(
+        "color_type".to_string(),
+        serde_json::json!(format!("{:?}", info.color_type)),
+    );
+    chunks.insert(
+        "compression".to_string(),
+        serde_json::json!(format!("{:?}", info.compression)),
+    );
+    chunks.insert(
+        "interlaced".to_string(),
+        serde_json::json!(format!("{:?}", info.interlaced)),
+    );
+
     Ok(serde_json::Value::Object(chunks))
 }
 
@@ -408,13 +495,15 @@ fn extract_video_metadata(
     file_size: u64,
     modified_timestamp: Option<i64>,
 ) -> Result<FileMetadata, String> {
-    // Basic video metadata - in a production app, you'd want to use a proper video parsing library
-    // For now, we'll return basic info with placeholder values
     let mut format_specific = serde_json::Map::new();
     format_specific.insert("codec".to_string(), serde_json::json!("Unknown"));
-    format_specific.insert("container".to_string(), serde_json::json!(
-        path.extension().and_then(|e| e.to_str()).unwrap_or("unknown")
-    ));
+    format_specific.insert(
+        "container".to_string(),
+        serde_json::json!(path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("unknown")),
+    );
 
     Ok(FileMetadata {
         file_name,
@@ -460,7 +549,7 @@ fn extract_audio_metadata(
                 if let Some(genre) = tag.genre() {
                     format_specific.insert("genre".to_string(), serde_json::json!(genre));
                 }
-                
+
                 // Extract duration if available from the tag
                 if let Some(duration) = tag.duration() {
                     return Ok(FileMetadata {
@@ -524,9 +613,314 @@ fn extract_wav_metadata(
     })
 }
 
+fn extract_flac_metadata(
+    path: &Path,
+    file_name: String,
+    file_path: String,
+    file_size: u64,
+    modified_timestamp: Option<i64>,
+) -> Result<FileMetadata, String> {
+    let mut format_specific = serde_json::Map::new();
+    format_specific.insert("format".to_string(), serde_json::json!("FLAC"));
+
+    // Parse FLAC file to extract Vorbis comments
+    let bytes = std::fs::read(path).map_err(|e| format!("Failed to read FLAC file: {}", e))?;
+
+    // Find the Vorbis comment block (block type 4)
+    if let Some(vorbis_comments) = parse_flac_vorbis_comments(&bytes) {
+        for comment in vorbis_comments {
+            let name_lower = comment.name.to_lowercase();
+            let value_str = String::from_utf8_lossy(&comment.value).to_string();
+
+            match name_lower.as_str() {
+                "title" => {
+                    let val = serde_json::json!(value_str);
+                    format_specific.insert("title".to_string(), val);
+                }
+                "artist" | "performer" => {
+                    let val = serde_json::json!(value_str);
+                    format_specific.insert("artist".to_string(), val);
+                }
+                "album" => {
+                    let val = serde_json::json!(value_str);
+                    format_specific.insert("album".to_string(), val);
+                }
+                "date" | "year" => {
+                    let val = serde_json::json!(value_str);
+                    format_specific.insert("year".to_string(), val);
+                }
+                "genre" => {
+                    let val = serde_json::json!(value_str);
+                    format_specific.insert("genre".to_string(), val);
+                }
+                _ => { /* Ignore other comments for now */ }
+            }
+        }
+    }
+
+    Ok(FileMetadata {
+        file_name,
+        file_path,
+        file_size,
+        modified_timestamp,
+        file_type: "Audio".to_string(),
+        width: None,
+        height: None,
+        duration: None,
+        bit_rate: None,
+        sample_rate: None,
+        channels: None,
+        format_specific: serde_json::Value::Object(format_specific),
+    })
+}
+
+struct FlacVorbisComment {
+    name: String,
+    value: Vec<u8>,
+}
+
+fn parse_flac_vorbis_comments(bytes: &[u8]) -> Option<Vec<FlacVorbisComment>> {
+    if bytes.len() < 4 {
+        eprintln!("FLAC: file too short for magic bytes");
+        return None;
+    }
+
+    for block in iter_flac_blocks(bytes, 4) {
+        if block.block_type == 4 {
+            return parse_vorbis_comment_block(block.data);
+        }
+    }
+
+    eprintln!("FLAC: no Vorbis comment block found");
+    None
+}
+
+fn parse_vorbis_comment_block(bytes: &[u8]) -> Option<Vec<FlacVorbisComment>> {
+    let mut comments = Vec::new();
+    let mut pos = 0;
+
+    // Read vendor string length (little-endian u32 per Vorbis spec)
+    if pos + 4 > bytes.len() {
+        return None;
+    }
+    let vendor_len = u32::from_le_bytes(bytes[pos..pos + 4].try_into().ok()?) as usize;
+    pos += 4 + vendor_len;
+
+    // Read number of comments (little-endian u32)
+    if pos + 4 > bytes.len() {
+        return None;
+    }
+    let num_comments = u32::from_le_bytes(bytes[pos..pos + 4].try_into().ok()?);
+    pos += 4;
+
+    for _ in 0..num_comments {
+        // Read comment string length (little-endian u32)
+        if pos + 4 > bytes.len() {
+            break;
+        }
+        let comment_len = u32::from_le_bytes(bytes[pos..pos + 4].try_into().ok()?) as usize;
+        pos += 4;
+
+        // Read full comment string and split on '='
+        if pos + comment_len > bytes.len() {
+            break;
+        }
+        let comment_str = String::from_utf8_lossy(&bytes[pos..pos + comment_len]).to_string();
+        pos += comment_len;
+
+        // Split on first '=' to get name and value
+        if let Some(eq_pos) = comment_str.find('=') {
+            let name = comment_str[..eq_pos].to_string();
+            let value = comment_str[eq_pos + 1..].as_bytes().to_vec();
+            comments.push(FlacVorbisComment { name, value });
+        }
+    }
+
+    Some(comments)
+}
+
+fn find_flac_embedded_json_matches(bytes: &[u8]) -> Result<Vec<FlacJsonMatch>, String> {
+    let comments = parse_flac_vorbis_comments(bytes)
+        .ok_or_else(|| "Failed to parse FLAC Vorbis comments".to_string())?;
+
+    let mut matches = Vec::new();
+    let mut next_id = 0usize;
+
+    for comment in comments {
+        if let Some((value, encoding, payload)) =
+            decode_json_payload(&String::from_utf8_lossy(&comment.value))
+        {
+            matches.push(FlacJsonMatch {
+                id: next_id,
+                label: comment.name.clone(),
+                payload,
+                decoded_json: value,
+                encoding,
+            });
+            next_id += 1;
+        }
+    }
+
+    Ok(matches)
+}
+
+fn flac_has_embedded_json(bytes: &[u8]) -> Result<bool, String> {
+    let comments = parse_flac_vorbis_comments(bytes)
+        .ok_or_else(|| "Failed to parse FLAC Vorbis comments".to_string())?;
+
+    for comment in comments {
+        if decode_json_payload(&String::from_utf8_lossy(&comment.value)).is_some() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+// Helper function to encode JSON with appropriate payload encoding
+fn encode_json_payload(json_text: &str) -> Result<Vec<u8>, String> {
+    // Try Base64 standard first for compactness
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(json_text.as_bytes());
+    Ok(encoded.into_bytes())
+}
+
+fn u32_to_synchsafe(value: u32) -> [u8; 4] {
+    let v = value & SYNCHSAFE_MASK;
+    [
+        ((v >> 21) & SYNCHSAFE_BYTE_MASK) as u8,
+        ((v >> 14) & SYNCHSAFE_BYTE_MASK) as u8,
+        ((v >> 7) & SYNCHSAFE_BYTE_MASK) as u8,
+        (v & SYNCHSAFE_BYTE_MASK) as u8,
+    ]
+}
+
+fn update_flac_embedded_json(path: &Path, entry_id: usize, json_text: &str) -> Result<(), String> {
+    let mut bytes = std::fs::read(path).map_err(|e| format!("Failed to read FLAC file: {}", e))?;
+
+    // Parse FLAC to find Vorbis comment block
+    let mut pos = 4; // Skip "fLaC" magic bytes
+    while pos + 4 <= bytes.len() {
+        let block_header = &bytes[pos..pos + 4];
+        let block_type = (block_header[0] as u32) >> 6;
+        let block_len = synchsafe_to_u32(&block_header[1..5]).max(1);
+
+        if block_type == 4 {
+            // Vorbis comment block
+            break;
+        }
+        pos += 4 + block_len as usize;
+    }
+
+    if pos + 4 > bytes.len() {
+        return Err("No Vorbis comment block found".to_string());
+    }
+
+    let block_len = synchsafe_to_u32(&bytes[pos..pos + 4]).max(1) as usize;
+    let vorbis_data_start = pos + 4;
+    let vorbis_block_end = vorbis_data_start + block_len;
+
+    if vorbis_block_end > bytes.len() {
+        return Err("Vorbis comment block extends beyond file".to_string());
+    }
+
+    // Parse the Vorbis comment block to find our target comment
+    let comments = parse_vorbis_comment_block(&bytes[vorbis_data_start..vorbis_block_end])
+        .ok_or_else(|| "Failed to parse Vorbis comment block".to_string())?;
+
+    if entry_id >= comments.len() {
+        return Err(format!(
+            "Entry ID {} out of range (0-{})",
+            entry_id,
+            comments.len() - 1
+        ));
+    }
+
+    let target_comment = &comments[entry_id];
+
+    // Encode the new JSON payload
+    let encoded_payload = encode_json_payload(json_text)?;
+
+    // Update the comment value in the Vorbis block data
+    let mut vorbis_data: Vec<u8> = bytes[vorbis_data_start..vorbis_block_end].to_vec();
+
+    // Find and update the target comment by index
+    let mut comment_pos = 0;
+    // Skip vendor string (little-endian u32 per Vorbis spec)
+    if comment_pos + 4 > vorbis_data.len() {
+        return Err("Failed to parse Vorbis block: no vendor string".to_string());
+    }
+    let vendor_len = u32::from_le_bytes(
+        vorbis_data[comment_pos..comment_pos + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse vendor length".to_string())?,
+    ) as usize;
+    comment_pos += 4 + vendor_len;
+
+    // Skip num comments header (little-endian u32)
+    if comment_pos + 4 > vorbis_data.len() {
+        return Err("Failed to parse Vorbis block: no comment count".to_string());
+    }
+    let num_comments = u32::from_le_bytes(
+        vorbis_data[comment_pos..comment_pos + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse comment count".to_string())?,
+    );
+    comment_pos += 4;
+
+    // Find and update the target comment
+    for i in 0..num_comments {
+        // Read comment string length (little-endian u32)
+        if comment_pos + 4 > vorbis_data.len() {
+            return Err("Failed to parse comment: truncated".to_string());
+        }
+        let comment_len = u32::from_le_bytes(
+            vorbis_data[comment_pos..comment_pos + 4]
+                .try_into()
+                .map_err(|_| "Failed to parse comment length".to_string())?,
+        ) as usize;
+        comment_pos += 4;
+
+        if comment_pos + comment_len > vorbis_data.len() {
+            return Err("Comment extends beyond block".to_string());
+        }
+
+        if i == entry_id as u32 {
+            // Build new comment string: tagname + "=" + encoded_payload
+            let new_value_str = String::from_utf8_lossy(&encoded_payload);
+            let new_comment = format!("{}={}", target_comment.name, new_value_str);
+            let new_comment_bytes = new_comment.as_bytes();
+            let actual_delta = new_comment_bytes.len() as i32 - comment_len as i32;
+
+            // Replace the old comment with the new one
+            let comment_end = comment_pos + comment_len;
+            vorbis_data.splice(comment_pos..comment_end, new_comment_bytes.iter().copied());
+
+            // Update the Vorbis block data in the file
+            bytes.splice(
+                vorbis_data_start..vorbis_block_end,
+                vorbis_data.iter().copied(),
+            );
+
+            // Update the Vorbis block header length (synchsafe encoding)
+            let old_block_len = synchsafe_to_u32(&bytes[pos..pos + 4]);
+            let new_block_len = old_block_len + actual_delta as u32;
+            bytes[pos + 1..pos + 5].copy_from_slice(&u32_to_synchsafe(new_block_len));
+
+            // Write with backup
+            write_with_backup(path, &bytes)?;
+
+            return Ok(());
+        }
+
+        comment_pos += comment_len;
+    }
+
+    Err(format!("Entry ID {} not found in comments", entry_id))
+}
+
 pub fn generate_thumbnail(file_path: &str, max_size: u32) -> Result<String, String> {
     let path = Path::new(file_path);
-    
+
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
@@ -535,18 +929,23 @@ pub fn generate_thumbnail(file_path: &str, max_size: u32) -> Result<String, Stri
 
     match extension.as_str() {
         "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" => {
-            let img = image::open(path)
-                .map_err(|e| format!("Failed to open image: {}", e))?;
-            
+            let img = image::open(path).map_err(|e| format!("Failed to open image: {}", e))?;
+
             let thumbnail = img.thumbnail(max_size, max_size);
-            
+
             let mut buffer = Vec::new();
             thumbnail
-                .write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Png)
+                .write_to(
+                    &mut std::io::Cursor::new(&mut buffer),
+                    image::ImageFormat::Png,
+                )
                 .map_err(|e| format!("Failed to encode thumbnail: {}", e))?;
-            
+
             use base64::Engine;
-            Ok(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&buffer)))
+            Ok(format!(
+                "data:image/png;base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(&buffer)
+            ))
         }
         _ => Err("Thumbnail generation not supported for this file type".to_string()),
     }
@@ -560,25 +959,22 @@ pub fn generate_audio_cover(file_path: &str, max_size: u32) -> Result<String, St
         .unwrap_or("")
         .to_lowercase();
 
-    if extension != "mp3" {
-        return Err("Embedded cover extraction is currently supported for MP3 files".to_string());
-    }
+    let image_data = match extension.as_str() {
+        "mp3" => extract_mp3_cover(path),
+        "flac" => extract_flac_picture(path),
+        _ => return Err(format!("Cover extraction not supported for {}", extension)),
+    }?;
 
-    let tag = id3::Tag::read_from_path(path)
-        .map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
-
-    let picture = tag
-        .pictures()
-        .next()
-        .ok_or_else(|| "No embedded cover art found".to_string())?;
-
-    let image = image::load_from_memory(&picture.data)
+    let image = image::load_from_memory(&image_data)
         .map_err(|e| format!("Failed to decode embedded cover art: {}", e))?;
 
     let thumbnail = image.thumbnail(max_size, max_size);
     let mut buffer = Vec::new();
     thumbnail
-        .write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Png)
+        .write_to(
+            &mut std::io::Cursor::new(&mut buffer),
+            image::ImageFormat::Png,
+        )
         .map_err(|e| format!("Failed to encode cover thumbnail: {}", e))?;
 
     use base64::Engine;
@@ -586,6 +982,65 @@ pub fn generate_audio_cover(file_path: &str, max_size: u32) -> Result<String, St
         "data:image/png;base64,{}",
         base64::engine::general_purpose::STANDARD.encode(&buffer)
     ))
+}
+
+fn extract_mp3_cover(path: &Path) -> Result<Vec<u8>, String> {
+    let tag =
+        id3::Tag::read_from_path(path).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+
+    let picture = tag
+        .pictures()
+        .next()
+        .ok_or_else(|| "No embedded cover art found".to_string())?;
+
+    Ok(picture.data.to_vec())
+}
+
+fn extract_flac_picture(path: &Path) -> Result<Vec<u8>, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
+
+    for block in iter_flac_blocks(&bytes, 4) {
+        if block.block_type == 6 {
+            return parse_flac_picture_block(block.data);
+        }
+    }
+
+    Err("No embedded cover art found".to_string())
+}
+
+fn parse_flac_picture_block(data: &[u8]) -> Result<Vec<u8>, String> {
+    let mut pos = 0;
+
+    pos += 4;
+    let mime_len = u32::from_be_bytes(
+        data[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse picture mime length")?,
+    ) as usize;
+    pos += 4 + mime_len;
+
+    pos += 4;
+    let desc_len = u32::from_be_bytes(
+        data[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse picture description length")?,
+    ) as usize;
+    pos += 4 + desc_len;
+
+    pos += 4 + 4 + 4;
+
+    let data_len = u32::from_be_bytes(
+        data[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse picture data length")?,
+    ) as usize;
+    pos += 4;
+
+    if pos + data_len > data.len() {
+        return Err("Picture data extends beyond block".to_string());
+    }
+
+    Ok(data[pos..pos + data_len].to_vec())
 }
 
 pub fn get_video_data_url(file_path: &str, max_bytes: usize) -> Result<String, String> {
@@ -606,19 +1061,20 @@ pub fn get_video_data_url(file_path: &str, max_bytes: usize) -> Result<String, S
         _ => return Err("Video preview not supported for this extension".to_string()),
     };
 
-    let metadata = fs::metadata(path)
-        .map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    let metadata =
+        fs::metadata(path).map_err(|e| format!("Failed to read file metadata: {}", e))?;
     let file_size = metadata.len() as usize;
 
     if file_size == 0 {
         return Err("Video file is empty".to_string());
     }
 
-    if file_size > max_bytes {
+    let max_allowed = max_bytes.min(VIDEO_PREVIEW_MAX_SIZE);
+    if file_size > max_allowed {
         return Err(format!(
             "Video is too large for in-app preview ({} MB > {} MB)",
             file_size / (1024 * 1024),
-            max_bytes / (1024 * 1024)
+            max_allowed / (1024 * 1024)
         ));
     }
 
@@ -628,7 +1084,50 @@ pub fn get_video_data_url(file_path: &str, max_bytes: usize) -> Result<String, S
     Ok(format!("data:{};base64,{}", mime, encoded))
 }
 
-pub fn list_embedded_base64_json_entries(file_path: &str) -> Result<Vec<EmbeddedJsonEntry>, String> {
+pub fn get_audio_data_url(file_path: &str, max_bytes: usize) -> Result<String, String> {
+    let path = Path::new(file_path);
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let mime = match ext.as_str() {
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "flac" => "audio/flac",
+        "ogg" => "audio/ogg",
+        "m4a" => "audio/mp4",
+        "aac" => "audio/aac",
+        _ => return Err("Audio preview not supported for this extension".to_string()),
+    };
+
+    let metadata =
+        fs::metadata(path).map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    let file_size = metadata.len() as usize;
+
+    if file_size == 0 {
+        return Err("Audio file is empty".to_string());
+    }
+
+    let max_allowed = max_bytes.min(VIDEO_PREVIEW_MAX_SIZE);
+    if file_size > max_allowed {
+        return Err(format!(
+            "Audio is too large for in-app preview ({} MB > {} MB)",
+            file_size / (1024 * 1024),
+            max_allowed / (1024 * 1024)
+        ));
+    }
+
+    let bytes = fs::read(path).map_err(|e| format!("Failed to read audio file: {}", e))?;
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(format!("data:{};base64,{}", mime, encoded))
+}
+
+pub fn list_embedded_base64_json_entries(
+    file_path: &str,
+) -> Result<Vec<EmbeddedJsonEntry>, String> {
     let path = Path::new(file_path);
     let ext = path
         .extension()
@@ -656,9 +1155,28 @@ pub fn list_embedded_base64_json_entries(file_path: &str) -> Result<Vec<Embedded
             .collect());
     }
 
+    if ext == "flac" {
+        let bytes = fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
+        let matches = find_flac_embedded_json_matches(&bytes)?;
+
+        return Ok(matches
+            .into_iter()
+            .map(|m| EmbeddedJsonEntry {
+                id: m.id,
+                chunk_type: "vorbis-comment".to_string(),
+                label: m.label,
+                base64: m.payload.clone(),
+                payload: m.payload,
+                payload_format: payload_format_name(&m.encoding).to_string(),
+                decoded_json: serde_json::to_string_pretty(&m.decoded_json)
+                    .unwrap_or_else(|_| "{}".to_string()),
+            })
+            .collect());
+    }
+
     if ext == "mp3" {
-        let tag = id3::Tag::read_from_path(path)
-            .map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+        let tag =
+            id3::Tag::read_from_path(path).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
         let mut matches = find_mp3_embedded_json_matches(&tag)?;
 
         // Some generators write non-standard but still readable JSON into early ID3 bytes.
@@ -744,14 +1262,26 @@ pub fn update_embedded_base64_json(
         return update_mp3_embedded_json(path, entry_id, json_text);
     }
 
+    if ext == "flac" {
+        return update_flac_embedded_json(path, entry_id, json_text);
+    }
+
     if matches!(ext.as_str(), "mp4" | "mov" | "avi" | "mkv") {
         return update_video_embedded_json(path, &ext, entry_id, json_text);
     }
 
-    Err("Editing embedded JSON is currently supported for PNG, MP3, and common video files".to_string())
+    Err(
+        "Editing embedded JSON is currently supported for PNG, MP3, and common video files"
+            .to_string(),
+    )
 }
 
-fn update_video_embedded_json(path: &Path, ext: &str, entry_id: usize, json_text: &str) -> Result<(), String> {
+fn update_video_embedded_json(
+    path: &Path,
+    ext: &str,
+    entry_id: usize,
+    json_text: &str,
+) -> Result<(), String> {
     let new_json_value: serde_json::Value =
         serde_json::from_str(json_text).map_err(|e| format!("Invalid JSON: {}", e))?;
     let new_json_compact = serde_json::to_string(&new_json_value)
@@ -786,7 +1316,11 @@ fn update_video_embedded_json(path: &Path, ext: &str, entry_id: usize, json_text
     Ok(())
 }
 
-fn update_mp4_embedded_json(path: &Path, entry_id: usize, new_json_compact: &str) -> Result<(), String> {
+fn update_mp4_embedded_json(
+    path: &Path,
+    entry_id: usize,
+    new_json_compact: &str,
+) -> Result<(), String> {
     let mut bytes = fs::read(path).map_err(|e| format!("Failed to read MP4/MOV file: {}", e))?;
     let (atoms, matches) = find_mp4_embedded_json_matches_with_atoms(&bytes)?;
     let target = matches
@@ -842,8 +1376,7 @@ fn update_png_embedded_json(path: &Path, entry_id: usize, json_text: &str) -> Re
     );
 
     let updated_png = build_png_bytes(&chunks);
-    write_with_backup(path, &updated_png)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    write_with_backup(path, &updated_png).map_err(|e| format!("Failed to write file: {}", e))?;
     Ok(())
 }
 
@@ -853,8 +1386,8 @@ fn update_mp3_embedded_json(path: &Path, entry_id: usize, json_text: &str) -> Re
     let new_json_compact = serde_json::to_string(&new_json_value)
         .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
 
-    let mut tag = id3::Tag::read_from_path(path)
-        .map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+    let mut tag =
+        id3::Tag::read_from_path(path).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
     let mut matches = find_mp3_embedded_json_matches(&tag)?;
     if matches.is_empty() {
         let bytes = fs::read(path).map_err(|e| format!("Failed to read MP3 file: {}", e))?;
@@ -1282,7 +1815,8 @@ fn png_has_embedded_json(chunks: &[PngChunk]) -> Result<bool, String> {
                 let compressed_bytes = &chunk.data[compressed_start..];
                 let mut decoder = flate2::read::ZlibDecoder::new(compressed_bytes);
                 let mut text = String::new();
-                if decoder.read_to_string(&mut text).is_ok() && decode_json_payload(&text).is_some() {
+                if decoder.read_to_string(&mut text).is_ok() && decode_json_payload(&text).is_some()
+                {
                     return Ok(true);
                 }
             }
@@ -1305,7 +1839,10 @@ fn decode_json_payload(input: &str) -> Option<(serde_json::Value, JsonPayloadEnc
         return None;
     }
 
-    let trimmed = trimmed.trim_start_matches('\u{feff}').trim_matches('\u{0}').trim();
+    let trimmed = trimmed
+        .trim_start_matches('\u{feff}')
+        .trim_matches('\u{0}')
+        .trim();
 
     if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
         return Some((value, JsonPayloadEncoding::PlainText, trimmed.to_string()));
@@ -1334,10 +1871,22 @@ fn decode_base64_json(input: &str) -> Option<(serde_json::Value, Base64Encoding)
     }
 
     let candidates = [
-        (Base64Encoding::Standard, base64::engine::general_purpose::STANDARD),
-        (Base64Encoding::StandardNoPad, base64::engine::general_purpose::STANDARD_NO_PAD),
-        (Base64Encoding::UrlSafe, base64::engine::general_purpose::URL_SAFE),
-        (Base64Encoding::UrlSafeNoPad, base64::engine::general_purpose::URL_SAFE_NO_PAD),
+        (
+            Base64Encoding::Standard,
+            base64::engine::general_purpose::STANDARD,
+        ),
+        (
+            Base64Encoding::StandardNoPad,
+            base64::engine::general_purpose::STANDARD_NO_PAD,
+        ),
+        (
+            Base64Encoding::UrlSafe,
+            base64::engine::general_purpose::URL_SAFE,
+        ),
+        (
+            Base64Encoding::UrlSafeNoPad,
+            base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        ),
     ];
 
     for (encoding, engine) in candidates {
@@ -1364,18 +1913,25 @@ fn decode_base64_json(input: &str) -> Option<(serde_json::Value, Base64Encoding)
 fn encode_base64_with_encoding(text: &str, encoding: Base64Encoding) -> String {
     use base64::Engine;
     match encoding {
-        Base64Encoding::Standard => base64::engine::general_purpose::STANDARD.encode(text.as_bytes()),
+        Base64Encoding::Standard => {
+            base64::engine::general_purpose::STANDARD.encode(text.as_bytes())
+        }
         Base64Encoding::StandardNoPad => {
             base64::engine::general_purpose::STANDARD_NO_PAD.encode(text.as_bytes())
         }
-        Base64Encoding::UrlSafe => base64::engine::general_purpose::URL_SAFE.encode(text.as_bytes()),
+        Base64Encoding::UrlSafe => {
+            base64::engine::general_purpose::URL_SAFE.encode(text.as_bytes())
+        }
         Base64Encoding::UrlSafeNoPad => {
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(text.as_bytes())
         }
     }
 }
 
-fn encode_payload_with_encoding(text: &str, encoding: &JsonPayloadEncoding) -> Result<Vec<u8>, String> {
+fn encode_payload_with_encoding(
+    text: &str,
+    encoding: &JsonPayloadEncoding,
+) -> Result<Vec<u8>, String> {
     match encoding {
         JsonPayloadEncoding::PlainText => Ok(text.as_bytes().to_vec()),
         JsonPayloadEncoding::Base64(base64_encoding) => {
@@ -1459,9 +2015,7 @@ fn find_mp3_json_matches_from_raw_id3(bytes: &[u8]) -> Result<Vec<Mp3JsonMatch>,
                         payload,
                         decoded_json: value,
                         encoding,
-                        frame_kind: Mp3FrameKind::ExtendedText {
-                            description,
-                        },
+                        frame_kind: Mp3FrameKind::ExtendedText { description },
                     });
                     next_id += 1;
                 }
@@ -1677,7 +2231,6 @@ fn parse_json_object_span(bytes: &[u8], start: usize) -> Option<usize> {
 }
 
 fn find_base64_candidate_spans(bytes: &[u8]) -> Vec<(usize, usize)> {
-    const MIN_BASE64_TOKEN_LEN: usize = 24;
     let mut spans = Vec::new();
     let mut i = 0usize;
 
@@ -1718,7 +2271,9 @@ fn find_mp4_embedded_json_matches(bytes: &[u8]) -> Result<Vec<VideoJsonMatch>, S
     Ok(matches)
 }
 
-fn find_mp4_embedded_json_matches_with_atoms(bytes: &[u8]) -> Result<(Vec<Mp4Atom>, Vec<VideoJsonMatch>), String> {
+fn find_mp4_embedded_json_matches_with_atoms(
+    bytes: &[u8],
+) -> Result<(Vec<Mp4Atom>, Vec<VideoJsonMatch>), String> {
     let mut atoms = Vec::new();
     parse_mp4_atoms(bytes, 0, bytes.len(), None, &mut atoms)?;
 
@@ -1753,7 +2308,11 @@ fn find_mp4_embedded_json_matches_with_atoms(bytes: &[u8]) -> Result<(Vec<Mp4Ato
                         id: next_id,
                         start: payload_start + rel_start,
                         end: payload_start + rel_end,
-                        label: format!("{}@{}", atom_type_label(atom.atom_type), payload_start + rel_start),
+                        label: format!(
+                            "{}@{}",
+                            atom_type_label(atom.atom_type),
+                            payload_start + rel_start
+                        ),
                         payload,
                         decoded_json: value,
                         encoding,
@@ -1781,7 +2340,10 @@ fn find_mp4_embedded_json_matches_with_atoms(bytes: &[u8]) -> Result<(Vec<Mp4Ato
             let abs_start = payload_start + rel_start;
             let abs_end = payload_start + rel_end;
 
-            if matches.iter().any(|m| !(abs_end <= m.start || abs_start >= m.end)) {
+            if matches
+                .iter()
+                .any(|m| !(abs_end <= m.start || abs_start >= m.end))
+            {
                 continue;
             }
 
@@ -1845,7 +2407,8 @@ fn parse_mp4_atoms(
             if size64 < 16 {
                 break;
             }
-            let size = usize::try_from(size64).map_err(|_| "MP4 atom size is too large".to_string())?;
+            let size =
+                usize::try_from(size64).map_err(|_| "MP4 atom size is too large".to_string())?;
             (size, 16usize, Mp4AtomSizeKind::Extended64(size64))
         } else {
             if size32 < 8 {
@@ -1915,7 +2478,7 @@ fn mp4_atom_is_container(atom_type: [u8; 4]) -> bool {
 }
 
 fn mp4_atom_is_json_candidate(atom: &Mp4Atom, atoms: &[Mp4Atom]) -> bool {
-    if atom.end.saturating_sub(atom.data_start) > 8 * 1024 * 1024 {
+    if atom.end.saturating_sub(atom.data_start) > VIDEO_ATOM_MAX_SIZE {
         return false;
     }
 
@@ -2004,17 +2567,6 @@ fn atom_type_label(atom_type: [u8; 4]) -> String {
     }
 }
 
-fn synchsafe_to_u32(bytes: &[u8]) -> u32 {
-    if bytes.len() < 4 {
-        return 0;
-    }
-
-    ((bytes[0] as u32) << 21)
-        | ((bytes[1] as u32) << 14)
-        | ((bytes[2] as u32) << 7)
-        | (bytes[3] as u32)
-}
-
 fn parse_text_frame_value(data: &[u8]) -> Option<String> {
     if data.is_empty() {
         return None;
@@ -2069,10 +2621,7 @@ fn build_backup_path(path: &Path) -> std::path::PathBuf {
         .unwrap_or(0);
 
     let mut backup = path.to_path_buf();
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("bak");
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("bak");
     backup.set_extension(format!("{}.charbrowser.{}.bak", ext, ts));
     backup
 }
@@ -2103,7 +2652,11 @@ fn decode_id3_text(enc: u8, bytes: &[u8]) -> Option<String> {
                     .collect::<Vec<_>>();
                 String::from_utf16(&units).ok()
             } else {
-                let start = if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE { 2 } else { 0 };
+                let start = if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
+                    2
+                } else {
+                    0
+                };
                 let units = bytes[start..]
                     .chunks_exact(2)
                     .map(|c| u16::from_le_bytes([c[0], c[1]]))
@@ -2162,8 +2715,8 @@ mod tests {
         );
 
         let target = &entries_before[0];
-        let mut parsed: serde_json::Value = serde_json::from_str(&target.decoded_json)
-            .expect("fixture embedded JSON should parse");
+        let mut parsed: serde_json::Value =
+            serde_json::from_str(&target.decoded_json).expect("fixture embedded JSON should parse");
         if let Some(obj) = parsed.as_object_mut() {
             obj.insert(
                 "charbrowser_roundtrip_test".to_string(),
@@ -2171,7 +2724,8 @@ mod tests {
             );
         }
 
-        let updated_text = serde_json::to_string_pretty(&parsed).expect("failed to serialize test JSON");
+        let updated_text =
+            serde_json::to_string_pretty(&parsed).expect("failed to serialize test JSON");
         update_embedded_base64_json(
             temp_path.to_str().expect("temp path must be valid UTF-8"),
             target.id,

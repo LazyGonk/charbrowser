@@ -39,26 +39,37 @@ fn get_video_data_url(file_path: String, max_bytes: u32) -> Result<String, Strin
 }
 
 #[tauri::command]
-fn get_embedded_base64_json_entries(file_path: String) -> Result<Vec<metadata::EmbeddedJsonEntry>, String> {
+fn get_audio_data_url(file_path: String, max_bytes: u32) -> Result<String, String> {
+    metadata::get_audio_data_url(&file_path, max_bytes as usize)
+}
+
+#[tauri::command]
+fn get_embedded_base64_json_entries(
+    file_path: String,
+) -> Result<Vec<metadata::EmbeddedJsonEntry>, String> {
     metadata::list_embedded_base64_json_entries(&file_path)
 }
 
 #[tauri::command]
-fn update_embedded_base64_json(file_path: String, entry_id: usize, json_text: String) -> Result<(), String> {
+fn update_embedded_base64_json(
+    file_path: String,
+    entry_id: usize,
+    json_text: String,
+) -> Result<(), String> {
     metadata::update_embedded_base64_json(&file_path, entry_id, &json_text)
 }
 
 #[tauri::command]
 fn list_directory_files(dir_path: String) -> Result<Vec<String>, String> {
     let path = Path::new(&dir_path);
-    
+
     if !path.is_dir() {
         return Err("Not a directory".to_string());
     }
 
     let mut files = Vec::new();
-    let entries = std::fs::read_dir(path)
-        .map_err(|e| format!("Failed to read directory: {}", e))?;
+    let entries =
+        std::fs::read_dir(path).map_err(|e| format!("Failed to read directory: {}", e))?;
 
     for entry in entries {
         if let Ok(entry) = entry {
@@ -66,9 +77,24 @@ fn list_directory_files(dir_path: String) -> Result<Vec<String>, String> {
             if path.is_file() {
                 if let Some(ext) = path.extension() {
                     let ext = ext.to_string_lossy().to_lowercase();
-                    if matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" 
-                                | "mp4" | "mov" | "avi" | "mkv" 
-                                | "mp3" | "wav" | "flac" | "ogg" | "m4a") {
+                    if matches!(
+                        ext.as_str(),
+                        "png"
+                            | "jpg"
+                            | "jpeg"
+                            | "gif"
+                            | "bmp"
+                            | "webp"
+                            | "mp4"
+                            | "mov"
+                            | "avi"
+                            | "mkv"
+                            | "mp3"
+                            | "wav"
+                            | "flac"
+                            | "ogg"
+                            | "m4a"
+                    ) {
                         if let Some(path_str) = path.to_str() {
                             files.push(path_str.to_string());
                         }
@@ -98,7 +124,10 @@ fn open_url_in_system_browser(url: String) -> Result<(), String> {
 fn open_legal_document_in_system_browser(doc_id: String) -> Result<(), String> {
     let (title, body) = match doc_id.as_str() {
         "license" => ("MIT License", include_str!("../../LICENSE")),
-        "notices" => ("Third-Party Notices", include_str!("../../THIRD_PARTY_NOTICES.md")),
+        "notices" => (
+            "Third-Party Notices",
+            include_str!("../../THIRD_PARTY_NOTICES.md"),
+        ),
         _ => return Err("Unknown legal document".to_string()),
     };
 
@@ -134,6 +163,7 @@ fn main() {
             get_file_filter_info,
             get_thumbnail,
             get_audio_cover,
+            get_audio_data_url,
             get_video_data_url,
             has_embedded_json,
             get_embedded_base64_json_entries,
@@ -143,5 +173,8 @@ fn main() {
             open_legal_document_in_system_browser
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|e| {
+            eprintln!("Application error: {}", e);
+            std::process::exit(1);
+        });
 }

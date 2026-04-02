@@ -1,6 +1,6 @@
 {
   "productName": "CharBrowser",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.charbrowser",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -31,7 +31,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'"
     }
   }
 }

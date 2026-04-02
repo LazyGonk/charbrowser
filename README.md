@@ -35,13 +35,13 @@ Screenshot image notice: The character image shown in the screenshot is licensed
 npm install
 ```
 
-1. Run in development mode:
+2. Run in development mode:
 
 ```bash
 npm run tauri dev
 ```
 
-1. Build for production:
+3. Build for production:
 
 ```bash
 npm run tauri build
@@ -60,7 +60,7 @@ npm run tauri build
 - Platform-specific dependencies for Tauri:
   - **Windows**: Microsoft C++ Build Tools, WebView2
   - **macOS**: Xcode Command Line Tools
-  - **Linux**: See [Tauri prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites)
+  - **Linux**: See [Tauri prerequisites](https://tauri.app/start/prerequisites)
 
 ## Usage
 
