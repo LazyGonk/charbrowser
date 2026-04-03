@@ -2,6 +2,8 @@
 
 This document covers release workflow, public-repo checks, and license notice generation.
 
+---
+
 ## Public Repository Checklist
 
 Before pushing changes intended for public release:
@@ -13,20 +15,22 @@ npm ci
 npm run build
 ```
 
-1. Verify Rust backend build:
+2. Verify Rust backend build:
 
 ```bash
 cd src-tauri
 cargo check
 ```
 
-1. Regenerate third-party notices and inventory:
+3. Regenerate third-party notices and inventory:
 
 ```bash
 npm run licenses:generate
 ```
 
-1. Confirm `LICENSE`, `THIRD_PARTY_NOTICES.md`, and `public/third-party-licenses.json` are up to date.
+4. Confirm `LICENSE`, `THIRD_PARTY_NOTICES.md`, and `public/third-party-licenses.json` are up to date.
+
+---
 
 ## Third-Party Notices
 
@@ -42,6 +46,8 @@ node scripts/generate-licenses.mjs
 
 - In-app access: click the **Licenses** button in the top-right toolbar to open the searchable popup with license links and copyright/author fields.
 
+---
+
 ## Automated Releases
 
 - GitHub Actions builds release artifacts for **Windows**, **macOS**, and **Linux**.
@@ -51,6 +57,8 @@ node scripts/generate-licenses.mjs
   - Run the `Release` workflow manually from GitHub Actions
 - Workflow file: `.github/workflows/release.yml`
 - Releases are created as **drafts** for review before publishing.
+
+---
 
 ## Recommended Publish Flow
 
@@ -69,3 +77,12 @@ git push origin --tags
 1. Verify on GitHub:
    - CI workflow succeeds
    - Release workflow creates/updates draft release
+
+---
+
+## Open Issues
+
+| Issue | Priority | Status |
+|-------|----------|--------|
+| `unwrap_or("Unknown")` silently hides failures | P2 | Open |
+| Duration not extracted for M4A/FLAC | P2 | Open |

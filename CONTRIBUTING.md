@@ -59,3 +59,29 @@ Use clear, imperative commit messages, for example:
 ## Reporting Security Issues
 
 Do not open public issues for vulnerabilities. See `SECURITY.md`.
+
+---
+
+## Maintaining Releases
+
+### Before Release
+
+1. Build and verify:
+
+```bash
+npm run build
+cd src-tauri && cargo check
+```
+
+2. Regenerate third-party notices:
+
+```bash
+npm run licenses:generate
+```
+
+### Automated Releases
+
+- GitHub Actions builds releases for **Windows**, **macOS**, **Linux**
+- Windows: portable exe only (no installer)
+- Trigger: push version tag (e.g., `v0.1.0`) or run Release workflow manually
+- Releases created as drafts for review

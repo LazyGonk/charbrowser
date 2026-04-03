@@ -26,6 +26,7 @@ const folderFilterStatus = document.getElementById('folderFilterStatus');
 const preview = document.getElementById('preview');
 const videoPreview = document.getElementById('videoPreview');
 const audioPreview = document.getElementById('audioPreview');
+const previewStage = document.querySelector('.preview-stage');
 const noPreview = document.getElementById('noPreview');
 const characterTextPanel = document.getElementById('characterTextPanel');
 const characterDescription = document.getElementById('characterDescription');
@@ -41,6 +42,7 @@ const embeddedJsonPayloadLabel = document.getElementById('embeddedJsonPayloadLab
 const embeddedJsonPayloadPreview = document.getElementById('embeddedJsonPayloadPreview');
 const embeddedJsonTree = document.getElementById('embeddedJsonTree');
 const saveEmbeddedJsonBtn = document.getElementById('saveEmbeddedJsonBtn');
+const copyMetadataBtn = document.getElementById('copyMetadataBtn');
 const embeddedJsonStatus = document.getElementById('embeddedJsonStatus');
 const jsonDiffModal = document.getElementById('jsonDiffModal');
 const jsonDiffSummary = document.getElementById('jsonDiffSummary');
@@ -970,6 +972,7 @@ async function loadFileMetadata(filePath) {
         // Display metadata
         displayMetadata(metadata);
         await loadEmbeddedBase64Json(filePath, ext);
+        await loadTextEntries(filePath, ext);
     } catch (error) {
         console.error('Error loading metadata:', error);
     }
@@ -989,7 +992,7 @@ async function loadEmbeddedBase64Json(filePath, ext) {
     embeddedJsonTextFilter.value = '';
     updateCharacterTextPanel(null, null);
 
-    if (ext !== 'png' && ext !== 'mp3' && ext !== 'flac' && !VIDEO_EXTS.has(ext)) {
+    if (ext !== 'png' && ext !== 'jpg' && ext !== 'jpeg' && ext !== 'gif' && ext !== 'bmp' && ext !== 'webp' && ext !== 'mp3' && ext !== 'flac' && !VIDEO_EXTS.has(ext)) {
         return;
     }
 
@@ -1000,8 +1003,7 @@ async function loadEmbeddedBase64Json(filePath, ext) {
         }
 
         if (!entries || entries.length === 0) {
-            embeddedJsonStatus.textContent = 'No embedded base64 JSON entries found.';
-            embeddedJsonSection.style.display = 'flex';
+            embeddedJsonSection.style.display = 'none';
             return;
         }
 
@@ -1011,9 +1013,247 @@ async function loadEmbeddedBase64Json(filePath, ext) {
         embeddedJsonSection.style.display = 'flex';
         applyEmbeddedJsonFilters();
     } catch (error) {
-        embeddedJsonSection.style.display = 'flex';
-        embeddedJsonStatus.textContent = `Error reading embedded JSON: ${String(error)}`;
+        embeddedJsonSection.style.display = 'none';
     }
+}
+
+const textEntriesSection = document.getElementById('textEntriesSection');
+const textEntriesSelect = document.getElementById('textEntriesSelect');
+const textEntriesContent = document.getElementById('textEntriesContent');
+const textEntriesStatus = document.getElementById('textEntriesStatus');
+let currentTextEntry = null;
+
+async function loadTextEntries(filePath, ext) {
+    if (textEntriesSection) {
+        textEntriesSection.style.display = 'none';
+    }
+    if (textEntriesSelect) {
+        textEntriesSelect.innerHTML = '';
+    }
+    if (textEntriesContent) {
+        textEntriesContent.textContent = '';
+    }
+    if (textEntriesStatus) {
+        textEntriesStatus.textContent = '';
+    }
+    currentTextEntry = null;
+
+    if (ext !== 'png') {
+        return;
+    }
+
+    try {
+        const entries = await invoke('get_text_entries', { filePath });
+        if (state.selectedFile !== filePath) {
+            return;
+        }
+
+        if (!entries || entries.length === 0) {
+            if (textEntriesStatus) {
+                textEntriesStatus.textContent = 'No plaintext entries found.';
+            }
+            return;
+        }
+
+        state.textEntries = entries;
+        
+        if (textEntriesSection) {
+            textEntriesSection.style.display = 'flex';
+        }
+
+        renderTextEntries();
+    } catch (error) {
+        if (textEntriesStatus) {
+            textEntriesStatus.textContent = `Error reading text entries: ${String(error)}`;
+        }
+    }
+}
+
+function renderTextEntries() {
+    if (!textEntriesSelect || !textEntriesContent || !state.textEntries) {
+        return;
+    }
+
+    textEntriesSelect.innerHTML = '';
+
+    for (const entry of state.textEntries) {
+        const option = document.createElement('option');
+        option.value = String(entry.id);
+        option.textContent = `${entry.label} [${entry.chunk_type}]`;
+        textEntriesSelect.appendChild(option);
+    }
+
+    textEntriesSelect.onchange = () => {
+        const entryId = Number(textEntriesSelect.value);
+        const entry = state.textEntries.find(e => e.id === entryId);
+        if (entry && textEntriesContent) {
+            textEntriesContent.textContent = entry.text;
+        }
+    };
+
+    if (state.textEntries.length > 0) {
+        textEntriesSelect.value = String(state.textEntries[0].id);
+        textEntriesSelect.onchange();
+    }
+}
+
+async function copyAllMetadata() {
+    if (!state.selectedFile) {
+        return;
+    }
+
+    const selectedExt = getExtension(state.selectedFile);
+    let output = '';
+
+    output = getPreferredEmbeddedJsonText();
+
+    const metadataPairsText = collectCopyableMetadataPairs();
+    if (!output && selectedExt === 'flac') {
+        output = metadataPairsText;
+    }
+
+    if (!output && selectedExt === 'png' && state.textEntries && state.textEntries.length > 0) {
+        for (const entry of state.textEntries) {
+            if (entry && typeof entry.text === 'string' && entry.text.trim().length > 0) {
+                output = entry.text.trim();
+                break;
+            }
+        }
+    }
+
+    if (!output) {
+        output = metadataPairsText;
+    }
+
+    if (!output && state.textEntries && state.textEntries.length > 0) {
+        for (const e of state.textEntries) {
+            if (e.text) {
+                output = e.text;
+                break;
+            }
+        }
+    }
+
+    if (!output) {
+        const descEl = document.getElementById('characterDescription');
+        const firstMesEl = document.getElementById('characterFirstMes');
+        const parts = [];
+
+        if (descEl && descEl.textContent && !descEl.textContent.includes('Not available')) {
+            parts.push(`Description: ${descEl.textContent}`);
+        }
+        if (firstMesEl && firstMesEl.textContent && !firstMesEl.textContent.includes('Not available')) {
+            parts.push(`First Message: ${firstMesEl.textContent}`);
+        }
+        if (parts.length > 0) {
+            output = parts.join('\n\n');
+        }
+    }
+
+    if (!output) {
+        if (copyMetadataBtn) {
+            copyMetadataBtn.title = 'No metadata to copy';
+        }
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(output);
+        if (copyMetadataBtn) {
+            copyMetadataBtn.textContent = 'Copied!';
+            setTimeout(() => {
+                if (copyMetadataBtn) {
+                    copyMetadataBtn.textContent = 'Copy All Metadata';
+                }
+            }, 2000);
+        }
+    } catch (err) {
+        console.error('Failed to copy:', err);
+    }
+}
+
+function getPreferredEmbeddedJsonText() {
+    if (!state.embeddedJsonEntries || state.embeddedJsonEntries.length === 0) {
+        return '';
+    }
+
+    const selectedId = Number(embeddedJsonSelect?.value);
+    const selectedEntry = state.embeddedJsonEntries.find((entry) => entry.id === selectedId);
+    const entries = selectedEntry
+        ? [selectedEntry, ...state.embeddedJsonEntries.filter((entry) => entry.id !== selectedId)]
+        : state.embeddedJsonEntries;
+
+    for (const entry of entries) {
+        if (!entry) {
+            continue;
+        }
+
+        if (typeof entry.decoded_json === 'string' && entry.decoded_json.trim().length > 0) {
+            try {
+                return JSON.stringify(JSON.parse(entry.decoded_json), null, 2);
+            } catch {
+                return entry.decoded_json;
+            }
+        }
+
+        if (typeof entry.payload === 'string' && entry.payload.trim().length > 0) {
+            return entry.payload;
+        }
+    }
+
+    return '';
+}
+
+function collectCopyableMetadataPairs() {
+    const metadataEl = document.getElementById('metadataContent');
+    if (!metadataEl) {
+        return '';
+    }
+
+    const info = [];
+    const seen = new Set();
+    const skipFields = new Set([
+        'File Type', 'File Path', 'File Name', 'File Size',
+        'Dimensions', 'Duration', 'Sample Rate', 'Channels', 'Bit Rate',
+        'Format'
+    ]);
+
+    const allRows = metadataEl.querySelectorAll('.metadata-row');
+    for (const row of allRows) {
+        const labelDiv = row.querySelector('.metadata-label');
+        const valueDiv = row.querySelector('.metadata-value');
+        if (!labelDiv || !valueDiv) {
+            continue;
+        }
+
+        const key = labelDiv.textContent.trim();
+        const val = valueDiv.textContent.trim();
+        if (skipFields.has(key) || val === 'N/A' || val === 'Unknown' || !val) {
+            continue;
+        }
+
+        const fullPair = `${key}: ${val}`;
+        if (!seen.has(fullPair)) {
+            seen.add(fullPair);
+            info.push(fullPair);
+        }
+    }
+
+    return info.join('\n');
+}
+
+function tryFormatJsonPretty(text) {
+    if (!text) return '';
+    try {
+        const parsed = JSON.parse(text);
+        return JSON.stringify(parsed, null, 2);
+    } catch {
+        return text;
+    }
+}
+
+if (copyMetadataBtn) {
+    copyMetadataBtn.addEventListener('click', copyAllMetadata);
 }
 
 function applyEmbeddedJsonFilters() {
@@ -1538,6 +1778,8 @@ async function updatePreview(filePath, ext, requestToken) {
     audioPreview.style.display = 'none';
     audioPreview.pause();
     audioPreview.removeAttribute('src');
+    previewStage?.classList.remove('audio-cover-layout');
+    previewStage?.classList.remove('audio-no-cover-layout');
     noPreview.textContent = 'No preview available';
     noPreview.style.display = 'none';
 
@@ -1598,6 +1840,7 @@ async function updatePreview(filePath, ext, requestToken) {
 
     if (AUDIO_EXTS.has(ext)) {
         let audioLoaded = false;
+        let hasCover = false;
 
         try {
             const audioSrc = await invoke('get_audio_data_url', {
@@ -1608,8 +1851,6 @@ async function updatePreview(filePath, ext, requestToken) {
                 return;
             }
             audioPreview.src = audioSrc;
-            audioPreview.style.display = 'block';
-            audioPreview.load();
             audioLoaded = true;
         } catch (error) {
             audioPreview.style.display = 'none';
@@ -1626,12 +1867,21 @@ async function updatePreview(filePath, ext, requestToken) {
             }
             preview.src = cover;
             preview.style.display = 'block';
+            hasCover = true;
         } catch (error) {
             preview.style.display = 'none';
             preview.removeAttribute('src');
         }
 
-        if (!audioLoaded) {
+        if (audioLoaded) {
+            if (hasCover) {
+                previewStage?.classList.add('audio-cover-layout');
+            } else {
+                previewStage?.classList.add('audio-no-cover-layout');
+            }
+            audioPreview.style.display = 'block';
+            audioPreview.load();
+        } else if (!hasCover) {
             noPreview.textContent = 'No audio preview available';
             noPreview.style.display = 'block';
         }
@@ -1750,7 +2000,7 @@ function getExifHighlights(formatSpecific) {
     if (!formatSpecific || typeof formatSpecific !== 'object') {
         return [];
     }
-
+    
     const exif = formatSpecific.exif;
     if (!exif || typeof exif !== 'object') {
         return [];

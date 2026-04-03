@@ -99,6 +99,7 @@
                     
                     <div class="metadata-panel">
                         <h2>File Information</h2>
+                        <button id="copyMetadataBtn" class="btn">Copy All Metadata</button>
                         <div id="metadataContent" class="metadata-content"></div>
                         <div id="embeddedJsonSection" class="embedded-json-section" style="display: none;">
                             <h3>Embedded JSON</h3>
@@ -129,6 +130,17 @@
                                 <button id="saveEmbeddedJsonBtn" class="btn">Save Embedded JSON</button>
                                 <div id="embeddedJsonStatus" class="embedded-json-status"></div>
                             </div>
+                        </div>
+                        <div id="textEntriesSection" class="embedded-json-section" style="display: none;">
+                            <h3>Plaintext Metadata</h3>
+                            <div class="embedded-json-filter-row">
+                                <div class="embedded-json-filter-item">
+                                    <label for="textEntriesSelect">Entry</label>
+                                    <select id="textEntriesSelect" class="embedded-json-select"></select>
+                                </div>
+                            </div>
+                            <pre id="textEntriesContent" class="json-payload-preview"></pre>
+                            <div id="textEntriesStatus" class="embedded-json-status"></div>
                         </div>
                     </div>
                 </div>

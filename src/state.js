@@ -1,4 +1,4 @@
-export const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp']);
+export const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'fits', 'fit']);
 export const VIDEO_EXTS = new Set(['mp4', 'mov', 'avi', 'mkv']);
 export const AUDIO_EXTS = new Set(['mp3', 'wav', 'flac', 'ogg', 'm4a']);
 export const MEDIA_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...AUDIO_EXTS]);
@@ -12,6 +12,7 @@ export const state = {
     embeddedJsonEntries: [],
     filteredEmbeddedJsonEntries: [],
     pendingEmbeddedJsonSave: null,
+    textEntries: [],
     embeddedJsonFieldDescriptors: [],
     embeddedJsonFieldSyncTimer: null,
     folderFilterDebounceTimer: null,

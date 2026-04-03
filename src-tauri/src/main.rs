@@ -60,6 +60,11 @@ fn update_embedded_base64_json(
 }
 
 #[tauri::command]
+fn get_text_entries(file_path: String) -> Result<Vec<metadata::TextEntry>, String> {
+    metadata::list_text_entries(&file_path)
+}
+
+#[tauri::command]
 fn list_directory_files(dir_path: String) -> Result<Vec<String>, String> {
     let path = Path::new(&dir_path);
 
@@ -85,6 +90,8 @@ fn list_directory_files(dir_path: String) -> Result<Vec<String>, String> {
                             | "gif"
                             | "bmp"
                             | "webp"
+                            | "fits"
+                            | "fit"
                             | "mp4"
                             | "mov"
                             | "avi"
@@ -168,6 +175,7 @@ fn main() {
             has_embedded_json,
             get_embedded_base64_json_entries,
             update_embedded_base64_json,
+            get_text_entries,
             list_directory_files,
             open_url_in_system_browser,
             open_legal_document_in_system_browser
