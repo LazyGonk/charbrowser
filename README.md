@@ -23,7 +23,7 @@ npm run tauri build # production
 
 ## Supported
 
-- **Images**: PNG, JPEG, GIF, BMP, WebP, FITS (preview N/A for FITS)
+- **Images**: PNG, JPEG, GIF, BMP, WebP, FITS (with arcsinh-stretched preview), TIFF
 - **Video**: MP4, MOV, AVI, MKV
 - **Audio**: MP3, WAV, FLAC, OGG, M4A
 

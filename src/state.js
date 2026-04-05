@@ -1,9 +1,4 @@
-export const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'fits', 'fit']);
-export const VIDEO_EXTS = new Set(['mp4', 'mov', 'avi', 'mkv']);
-export const AUDIO_EXTS = new Set(['mp3', 'wav', 'flac', 'ogg', 'm4a']);
-export const MEDIA_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...AUDIO_EXTS]);
-export const THUMBNAIL_CONCURRENCY = 2;
-export const CACHE_MAX_SIZE = 500;
+import { CACHE_MAX_SIZE } from './constants.js';
 
 export const state = {
     currentFiles: [],
@@ -34,17 +29,4 @@ export function evictCacheIfNeeded(cache) {
         const toRemove = keys.slice(0, Math.floor(CACHE_MAX_SIZE / 2));
         toRemove.forEach(key => cache.delete(key));
     }
-}
-
-export function getExtension(filePath) {
-    const lastDot = filePath.lastIndexOf('.');
-    return lastDot >= 0 ? filePath.slice(lastDot + 1).toLowerCase() : '';
-}
-
-export function fileKindByPath(filePath) {
-    const ext = getExtension(filePath);
-    if (IMAGE_EXTS.has(ext)) return 'image';
-    if (VIDEO_EXTS.has(ext)) return 'video';
-    if (AUDIO_EXTS.has(ext)) return 'audio';
-    return 'other';
 }

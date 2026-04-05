@@ -14,7 +14,22 @@ pub mod embedded;
 
 pub use types::{EmbeddedJsonEntry, FileFilterInfo, FileMetadata, TextEntry};
 
-pub use image::generate_thumbnail;
+/// Routes thumbnail generation to the format-specific handler.
+/// FITS files use a dedicated arcsinh-stretched renderer; all other image
+/// formats are handled by the image crate via `image::generate_thumbnail`.
+pub fn generate_thumbnail(file_path: &str, max_size: u32) -> Result<String, String> {
+    let ext = Path::new(file_path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    match ext.as_str() {
+        "fits" | "fit" => fits::generate_fits_thumbnail(file_path, max_size),
+        _ => image::generate_thumbnail(file_path, max_size),
+    }
+}
+
 pub use audio::{generate_audio_cover, get_audio_data_url};
 pub use video::get_video_data_url;
 pub use embedded::{file_has_embedded_json, list_embedded_base64_json_entries, list_text_entries, update_embedded_base64_json};
@@ -69,6 +84,14 @@ fn detect_file_type_by_magic_bytes(path: &Path) -> Option<&'static str> {
     if bytes.starts_with(b"SIMPLE  =") {
         return Some("fits");
     }
+    // TIFF (little-endian II and big-endian MM variants).
+    // Detected after other formats because TIFF-based camera RAW files share
+    // these magic bytes — they all fall through to image extraction.
+    if bytes.starts_with(&[0x49, 0x49, 0x2A, 0x00]) ||
+       bytes.starts_with(&[0x4D, 0x4D, 0x00, 0x2A])
+    {
+        return Some("image");
+    }
 
     None
 }
@@ -102,8 +125,11 @@ pub fn extract_metadata(path: &Path) -> Result<FileMetadata, String> {
     let detected_type = detect_file_type_by_magic_bytes(path);
 
     let file_type = detected_type.unwrap_or_else(|| match extension.as_str() {
+        // Standard image formats
         "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" => "image",
-        "mp4" | "mov" | "avi" | "mkv" => "video", 
+        // TIFF and TIFF-based camera RAW formats (all decoded via the image crate tiff feature)
+        "tif" | "tiff" | "nef" | "arw" | "orf" | "pef" | "rw2" | "dng" => "image",
+        "mp4" | "mov" | "avi" | "mkv" => "video",
         "mp3" | "m4a" => "audio",
         "ogg" => "audio",
         "flac" => "audio",
@@ -201,7 +227,12 @@ pub fn extract_filter_info(path: &Path, include_exif: bool) -> Result<FileFilter
     let mut has_exif = None;
     let mut search_parts = vec![file_name.clone(), file_path.clone()];
 
-    let file_kind = if matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "fits" | "fit") {
+    // TIFF and TIFF-based camera RAW formats are handled alongside standard images.
+    // image::image_dimensions works for TIFF once the "tiff" feature is enabled.
+    let file_kind = if matches!(extension.as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "fits" | "fit" |
+        "tif" | "tiff" | "nef" | "arw" | "orf" | "pef" | "rw2" | "dng"
+    ) {
         if let Ok((w, h)) = ::image::image_dimensions(path) {
             width = Some(w);
             height = Some(h);

@@ -1,6 +1,6 @@
 [package]
 name = "charbrowser"
-version = "0.1.3"
+version = "0.1.4"
 description = "A desktop application to display metadata from images, videos, and audio files"
 license = "MIT"
 authors = ["LazyGonk"]
@@ -15,7 +15,7 @@ tauri-plugin-fs = "2.0"
 tauri-plugin-dialog = "2.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-image = "0.25"
+image = { version = "0.25", features = ["tiff"] }
 id3 = "1.13"
 png = "0.17"
 base64 = "0.22"

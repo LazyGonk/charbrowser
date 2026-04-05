@@ -1,6 +1,6 @@
 {
   "productName": "CharBrowser",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "identifier": "com.charbrowser",
   "build": {
     "beforeDevCommand": "npm run dev",

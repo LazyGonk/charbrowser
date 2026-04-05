@@ -1,6 +1,6 @@
 {
   "name": "charbrowser",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A desktop application to display metadata from images, videos, and audio files",
   "author": "LazyGonk",
   "license": "MIT",
