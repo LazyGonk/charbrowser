@@ -13,6 +13,19 @@
   "permissions": [
     "core:default",
     "core:event:allow-listen",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "dialog:allow-save",
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-stat",
+      "allow": [{ "path": "**" }]
+    }
   ]
 }

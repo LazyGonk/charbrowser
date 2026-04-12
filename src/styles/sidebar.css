@@ -1,0 +1,279 @@
+/* Folder sidebar list, filters, splitters, and drop-zone shell. */
+.sidebar {
+    width: var(--sidebar-width);
+    min-width: 180px;
+    max-width: 65vw;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+}
+
+.splitter {
+    background: var(--border);
+    position: relative;
+    z-index: 2;
+    user-select: none;
+    touch-action: none;
+}
+
+.splitter::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    transition: background 0.15s ease;
+}
+
+.splitter:hover::after,
+.splitter.dragging::after {
+    background: rgba(0, 122, 204, 0.35);
+}
+
+.splitter-vertical {
+    width: 6px;
+    cursor: col-resize;
+}
+
+.splitter-horizontal {
+    height: 6px;
+    cursor: row-resize;
+}
+
+.folder-path {
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.folder-filters {
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    display: grid;
+    gap: 8px;
+}
+
+.folder-filter-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.folder-filter-row-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.folder-filter-input,
+.folder-filter-select {
+    width: 100%;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 8px;
+    font-size: 12px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.folder-filter-input:focus,
+.folder-filter-select:focus,
+.json-editor:focus,
+.embedded-json-select:focus,
+.embedded-json-text-filter:focus {
+    outline: none;
+    border-color: #2d9ceb;
+    box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.folder-filter-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+        white-space: normal;
+        line-height: 1.25;
+    min-width: 0;
+}
+
+    .folder-filter-checkbox input {
+        margin-top: 1px;
+        flex: 0 0 auto;
+    }
+
+.folder-filter-select-small {
+    width: 80px;
+}
+
+.folder-filter-status {
+    min-height: 16px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.file-list-empty {
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 8px;
+}
+
+.file-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.file-list:focus {
+    outline: 2px solid rgba(0, 122, 204, 0.55);
+    outline-offset: -2px;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 4px;
+        border: 1px solid transparent;
+        transition: background 0.2s, border-color 0.2s;
+}
+
+.file-item:hover {
+    background: var(--bg-tertiary);
+        border-color: rgba(107, 182, 255, 0.2);
+}
+
+.file-item.selected {
+    background: var(--accent);
+        border-color: rgba(255, 255, 255, 0.28);
+}
+
+.file-item-new {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    border: 1px dashed var(--border);
+    background: var(--bg-secondary);
+    color: var(--accent);
+    font-weight: 500;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.file-item-new:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent);
+    border-style: solid;
+}
+
+.file-item-new.active {
+    background: var(--accent);
+    border-color: rgba(255, 255, 255, 0.28);
+    border-style: solid;
+}
+
+.file-item-new.active .file-name,
+.file-item-new.active .file-icon {
+    color: white;
+}
+
+.file-item-new .file-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    margin-right: 12px;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.file-item-new .file-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--accent);
+}
+
+.file-thumbnail {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-right: 12px;
+    background: var(--bg-tertiary);
+}
+
+.file-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    margin-right: 12px;
+    font-size: 20px;
+}
+
+.file-name {
+    flex: 1;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.content {
+    flex: 1;
+    display: flex;
+    position: relative;
+}
+
+.drop-zone {
+    width: 100%;
+    flex: 1;
+    min-height: 220px;
+    max-height: min(58vh, 520px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--border);
+    margin: 16px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(0, 122, 204, 0.1);
+}
+
+.drop-zone-content {
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.drop-zone-content svg {
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.drop-zone-content h2 {
+    margin-bottom: 8px;
+    font-size: 20px;
+    color: var(--text-primary);
+}
+

@@ -1,15 +1,83 @@
-use base64::Engine;
 use crate::metadata::embedded::{decode_json_payload, encode_payload_with_encoding};
+use crate::metadata::types::FileMetadata;
 use crate::metadata::types::{FlacJsonMatch, FlacVorbisComment, Mp3FrameKind, Mp3JsonMatch};
+use crate::metadata::utils::build_backup_path;
+use crate::metadata::utils::{synchsafe_to_u32, u32_to_synchsafe};
+use crate::metadata::utils::{
+    write_with_backup, FLAC_BLOCK_TYPE_PICTURE, FLAC_BLOCK_TYPE_VORBIS_COMMENT,
+};
+use base64::Engine;
 use id3::frame::{Comment, Content, ExtendedText, Frame, Lyrics};
 use id3::TagLike;
-use crate::metadata::types::FileMetadata;
-use crate::metadata::utils::{u32_to_synchsafe, synchsafe_to_u32};
-use crate::metadata::utils::{FLAC_BLOCK_TYPE_PICTURE, FLAC_BLOCK_TYPE_VORBIS_COMMENT, write_with_backup};
-use crate::metadata::utils::build_backup_path;
 use std::fs;
 use std::path::Path;
 
+fn read_m4a_duration(path: &Path) -> Option<f64> {
+    let bytes = std::fs::read(path).ok()?;
+    let mut atoms = Vec::new();
+    crate::metadata::video::parse_mp4_atoms(&bytes, 0, bytes.len(), None, &mut atoms).ok()?;
+
+    let mvhd = atoms.iter().find(|atom| atom.atom_type == *b"mvhd")?;
+    if mvhd.end > bytes.len() || mvhd.data_start + 4 > mvhd.end {
+        return None;
+    }
+
+    let mvhd_data = &bytes[mvhd.data_start..mvhd.end];
+    let version = mvhd_data[0];
+
+    let (timescale, duration) = if version == 1 {
+        if mvhd_data.len() < 32 {
+            return None;
+        }
+        let timescale = u32::from_be_bytes(mvhd_data[20..24].try_into().ok()?);
+        let duration = u64::from_be_bytes(mvhd_data[24..32].try_into().ok()?);
+        (timescale, duration)
+    } else {
+        if mvhd_data.len() < 20 {
+            return None;
+        }
+        let timescale = u32::from_be_bytes(mvhd_data[12..16].try_into().ok()?);
+        let duration = u32::from_be_bytes(mvhd_data[16..20].try_into().ok()?) as u64;
+        (timescale, duration)
+    };
+
+    if timescale == 0 {
+        return None;
+    }
+
+    Some(duration as f64 / timescale as f64)
+}
+
+fn parse_flac_streaminfo(bytes: &[u8]) -> Option<(u32, u16, u64)> {
+    if bytes.len() < 4 || &bytes[0..4] != b"fLaC" {
+        return None;
+    }
+
+    for block in crate::metadata::image::iter_flac_blocks(bytes, 4) {
+        if block.block_type != 0 {
+            continue;
+        }
+
+        if block.data.len() < 18 {
+            return None;
+        }
+
+        let packed = u64::from_be_bytes(block.data[10..18].try_into().ok()?);
+        let sample_rate = ((packed >> 44) & 0x000F_FFFF) as u32;
+        let channels = (((packed >> 41) & 0x0000_0007) as u16) + 1;
+        let total_samples = packed & 0x0000_01FF_FFFF_FFFF;
+
+        if sample_rate == 0 {
+            return None;
+        }
+
+        return Some((sample_rate, channels, total_samples));
+    }
+
+    None
+}
+
+/// Extracts baseline audio metadata and common tag fields.
 pub fn extract_audio_metadata(
     path: &Path,
     file_name: String,
@@ -19,8 +87,17 @@ pub fn extract_audio_metadata(
 ) -> Result<FileMetadata, String> {
     let mut format_specific = serde_json::Map::new();
 
-    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-        if ext.to_lowercase() == "mp3" {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|value| value.to_lowercase())
+        .unwrap_or_default();
+
+    if ext == "m4a" {
+        format_specific.insert("format".to_string(), serde_json::json!("M4A"));
+    }
+
+    if ext == "mp3" {
             if let Ok(tag) = id3::Tag::read_from_path(path) {
                 if let Some(title) = tag.title() {
                     format_specific.insert("title".to_string(), serde_json::json!(title));
@@ -41,10 +118,29 @@ pub fn extract_audio_metadata(
                     format_specific.insert("track".to_string(), serde_json::json!(track));
                 }
                 if let Some(album_artist) = tag.album_artist() {
-                    format_specific.insert("album_artist".to_string(), serde_json::json!(album_artist));
+                    format_specific
+                        .insert("album_artist".to_string(), serde_json::json!(album_artist));
                 }
                 if let Some(comment) = tag.comments().next() {
-                    format_specific.insert("comment".to_string(), serde_json::json!(comment.text.clone()));
+                    format_specific.insert(
+                        "comment".to_string(),
+                        serde_json::json!(comment.text.clone()),
+                    );
+                }
+
+                // Extract plain text lyrics (not JSON-encoded)
+                for frame in tag.frames() {
+                    if let id3::Content::Lyrics(lyrics) = frame.content() {
+                        if !lyrics.text.trim().is_empty()
+                            && decode_json_payload(&lyrics.text).is_none()
+                        {
+                            format_specific.insert(
+                                "lyrics".to_string(),
+                                serde_json::json!(lyrics.text.clone()),
+                            );
+                            break; // Only first lyrics frame
+                        }
+                    }
                 }
 
                 for frame in tag.frames() {
@@ -83,7 +179,23 @@ pub fn extract_audio_metadata(
                     });
                 }
             }
-        }
+    }
+
+    if ext == "m4a" {
+        return Ok(FileMetadata {
+            file_name,
+            file_path,
+            file_size,
+            modified_timestamp,
+            file_type: "Audio".to_string(),
+            width: None,
+            height: None,
+            duration: read_m4a_duration(path),
+            bit_rate: None,
+            sample_rate: None,
+            channels: None,
+            format_specific: serde_json::Value::Object(format_specific),
+        });
     }
 
     Ok(FileMetadata {
@@ -102,6 +214,279 @@ pub fn extract_audio_metadata(
     })
 }
 
+/// Updates editable MP3 ID3 fields using the existing id3 crate write path.
+pub fn update_mp3_metadata_fields(
+    path: &Path,
+    updates: &std::collections::HashMap<String, String>,
+) -> Result<usize, String> {
+    let mut tag =
+        id3::Tag::read_from_path(path).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+
+    let mut applied = 0usize;
+    for (raw_key, raw_value) in updates {
+        let key = raw_key.trim().to_lowercase();
+        let value = raw_value.trim().to_string();
+
+        match key.as_str() {
+            "title" => {
+                tag.set_title(value);
+                applied += 1;
+            }
+            "artist" => {
+                tag.set_artist(value);
+                applied += 1;
+            }
+            "album" => {
+                tag.set_album(value);
+                applied += 1;
+            }
+            "album_artist" => {
+                tag.set_album_artist(value);
+                applied += 1;
+            }
+            "genre" => {
+                tag.set_genre(value);
+                applied += 1;
+            }
+            "track" => {
+                let parsed = value
+                    .parse::<u32>()
+                    .map_err(|_| format!("Invalid numeric track value: {}", raw_value))?;
+                tag.set_track(parsed);
+                applied += 1;
+            }
+            "year" => {
+                let parsed = value
+                    .parse::<i32>()
+                    .map_err(|_| format!("Invalid numeric year value: {}", raw_value))?;
+                tag.set_year(parsed);
+                applied += 1;
+            }
+            "comment" => {
+                tag.add_frame(Frame::with_content(
+                    "COMM",
+                    Content::Comment(Comment {
+                        lang: "eng".to_string(),
+                        description: "".to_string(),
+                        text: value,
+                    }),
+                ));
+                applied += 1;
+            }
+            _ => {
+                // Allow direct edit for plain text frame IDs shown in the metadata list.
+                let frame_id = raw_key.trim().to_uppercase();
+                if frame_id.len() == 4 && frame_id.chars().all(|c| c.is_ascii_alphanumeric()) {
+                    tag.add_frame(Frame::with_content(frame_id, Content::Text(value)));
+                    applied += 1;
+                }
+            }
+        }
+    }
+
+    if applied == 0 {
+        return Err("No supported MP3 metadata fields were provided.".to_string());
+    }
+
+    let backup_path = build_backup_path(path);
+    fs::copy(path, &backup_path)
+        .map_err(|e| format!("Failed to create backup before write: {}", e))?;
+
+    if let Err(e) = tag.write_to_path(path, id3::Version::Id3v24) {
+        let _ = fs::copy(&backup_path, path);
+        let _ = fs::remove_file(&backup_path);
+        return Err(format!("Failed to write ID3 tag: {}", e));
+    }
+
+    let _ = fs::remove_file(&backup_path);
+    Ok(applied)
+}
+
+/// Updates editable FLAC Vorbis comments using in-file metadata block rewrite.
+pub fn update_flac_vorbis_fields(
+    path: &Path,
+    updates: &std::collections::HashMap<String, String>,
+) -> Result<usize, String> {
+    let mut bytes = std::fs::read(path).map_err(|e| format!("Failed to read FLAC file: {}", e))?;
+    if bytes.len() < 4 || &bytes[0..4] != b"fLaC" {
+        return Err("Not a valid FLAC file".to_string());
+    }
+
+    let mut block_pos = 4usize;
+    let mut vorbis_header_pos = None;
+    let mut vorbis_data_start = 0usize;
+    let mut vorbis_data_end = 0usize;
+
+    while block_pos + 4 <= bytes.len() {
+        let header = bytes[block_pos];
+        let block_type = header & 0x7F;
+        let block_len =
+            crate::metadata::utils::synchsafe_24_to_u32(&bytes[block_pos + 1..block_pos + 4])
+                as usize;
+        let data_start = block_pos + 4;
+        let data_end = data_start + block_len;
+
+        if data_end > bytes.len() {
+            return Err("FLAC metadata block exceeds file bounds".to_string());
+        }
+
+        if block_type == FLAC_BLOCK_TYPE_VORBIS_COMMENT {
+            vorbis_header_pos = Some(block_pos);
+            vorbis_data_start = data_start;
+            vorbis_data_end = data_end;
+            break;
+        }
+
+        if (header & 0x80) != 0 {
+            break;
+        }
+        block_pos = data_end;
+    }
+
+    let Some(vorbis_header_pos) = vorbis_header_pos else {
+        return Err("No FLAC Vorbis comment block found".to_string());
+    };
+
+    let (vendor, mut comments) =
+        parse_flac_vorbis_block_raw(&bytes[vorbis_data_start..vorbis_data_end])?;
+
+    let mut applied = 0usize;
+    for (raw_key, raw_value) in updates {
+        let key = raw_key.trim().to_uppercase();
+        if key.is_empty()
+            || key == "FORMAT"
+            || key == "COVER_ART"
+            || key == "METADATA_BLOCK_PICTURE"
+        {
+            continue;
+        }
+
+        let value = raw_value.trim().to_string();
+        if let Some(existing) = comments
+            .iter_mut()
+            .find(|(name, _)| name.eq_ignore_ascii_case(&key))
+        {
+            if existing.1 != value {
+                existing.1 = value;
+                applied += 1;
+            }
+        } else {
+            comments.push((key, value));
+            applied += 1;
+        }
+    }
+
+    if applied == 0 {
+        return Err("No supported FLAC metadata fields were provided.".to_string());
+    }
+
+    let rebuilt = build_flac_vorbis_block_raw(&vendor, &comments)?;
+    if rebuilt.len() > 0x00FF_FFFF {
+        return Err(
+            "Updated Vorbis comment block exceeds FLAC metadata block size limit".to_string(),
+        );
+    }
+
+    bytes.splice(vorbis_data_start..vorbis_data_end, rebuilt.iter().copied());
+
+    let new_len = rebuilt.len() as u32;
+    bytes[vorbis_header_pos + 1] = ((new_len >> 16) & 0xFF) as u8;
+    bytes[vorbis_header_pos + 2] = ((new_len >> 8) & 0xFF) as u8;
+    bytes[vorbis_header_pos + 3] = (new_len & 0xFF) as u8;
+
+    write_with_backup(path, &bytes)?;
+    Ok(applied)
+}
+
+/// Parses raw FLAC Vorbis comment payload preserving vendor string.
+fn parse_flac_vorbis_block_raw(data: &[u8]) -> Result<(Vec<u8>, Vec<(String, String)>), String> {
+    let mut pos = 0usize;
+    if pos + 4 > data.len() {
+        return Err("Vorbis block missing vendor length".to_string());
+    }
+
+    let vendor_len = u32::from_le_bytes(
+        data[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse vendor length".to_string())?,
+    ) as usize;
+    pos += 4;
+
+    if pos + vendor_len > data.len() {
+        return Err("Vorbis block vendor exceeds bounds".to_string());
+    }
+    let vendor = data[pos..pos + vendor_len].to_vec();
+    pos += vendor_len;
+
+    if pos + 4 > data.len() {
+        return Err("Vorbis block missing comment count".to_string());
+    }
+    let count = u32::from_le_bytes(
+        data[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse comment count".to_string())?,
+    ) as usize;
+    pos += 4;
+
+    let mut comments = Vec::new();
+    for _ in 0..count {
+        if pos + 4 > data.len() {
+            return Err("Vorbis block missing comment length".to_string());
+        }
+
+        let len = u32::from_le_bytes(
+            data[pos..pos + 4]
+                .try_into()
+                .map_err(|_| "Failed to parse comment length".to_string())?,
+        ) as usize;
+        pos += 4;
+
+        if pos + len > data.len() {
+            return Err("Vorbis comment exceeds bounds".to_string());
+        }
+
+        let entry = String::from_utf8_lossy(&data[pos..pos + len]).to_string();
+        pos += len;
+
+        if let Some(eq_pos) = entry.find('=') {
+            comments.push((
+                entry[..eq_pos].to_uppercase(),
+                entry[eq_pos + 1..].to_string(),
+            ));
+        }
+    }
+
+    Ok((vendor, comments))
+}
+
+/// Builds raw FLAC Vorbis comment payload from vendor and comments.
+fn build_flac_vorbis_block_raw(
+    vendor: &[u8],
+    comments: &[(String, String)],
+) -> Result<Vec<u8>, String> {
+    if vendor.len() > u32::MAX as usize || comments.len() > u32::MAX as usize {
+        return Err("Vorbis metadata exceeds supported length".to_string());
+    }
+
+    let mut out = Vec::new();
+    out.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
+    out.extend_from_slice(vendor);
+    out.extend_from_slice(&(comments.len() as u32).to_le_bytes());
+
+    for (name, value) in comments {
+        let line = format!("{}={}", name, value);
+        if line.len() > u32::MAX as usize {
+            return Err("Vorbis comment line exceeds supported length".to_string());
+        }
+
+        out.extend_from_slice(&(line.len() as u32).to_le_bytes());
+        out.extend_from_slice(line.as_bytes());
+    }
+
+    Ok(out)
+}
+
+/// Extracts baseline WAV container metadata.
 pub fn extract_wav_metadata(
     _path: &Path,
     file_name: String,
@@ -128,6 +513,7 @@ pub fn extract_wav_metadata(
     })
 }
 
+/// Extracts FLAC Vorbis comment metadata and optional embedded artwork.
 pub fn extract_flac_metadata(
     path: &Path,
     file_name: String,
@@ -150,16 +536,29 @@ pub fn extract_flac_metadata(
                         use base64::Engine;
                         format_specific.insert(
                             "cover_art".to_string(),
-                            serde_json::json!(base64::engine::general_purpose::STANDARD.encode(&picture_data)),
+                            serde_json::json!(
+                                base64::engine::general_purpose::STANDARD.encode(&picture_data)
+                            ),
                         );
                     }
                 }
+            } else if key == "UNSYNCEDLYRICS" {
+                let value = String::from_utf8_lossy(&comment.value).to_string();
+                format_specific.insert("lyrics".to_string(), serde_json::json!(value));
             } else {
                 let value = String::from_utf8_lossy(&comment.value).to_string();
                 format_specific.insert(key, serde_json::json!(value));
             }
         }
     }
+
+    let (sample_rate, channels, total_samples) = parse_flac_streaminfo(&bytes)
+        .map(|(rate, channel_count, samples)| (Some(rate), Some(channel_count), Some(samples)))
+        .unwrap_or((None, None, None));
+    let duration = match (sample_rate, total_samples) {
+        (Some(rate), Some(samples)) if rate > 0 => Some(samples as f64 / rate as f64),
+        _ => None,
+    };
 
     Ok(FileMetadata {
         file_name,
@@ -169,14 +568,15 @@ pub fn extract_flac_metadata(
         file_type: "Audio".to_string(),
         width: None,
         height: None,
-        duration: None,
+        duration,
         bit_rate: None,
-        sample_rate: None,
-        channels: None,
+        sample_rate,
+        channels,
         format_specific: serde_json::Value::Object(format_specific),
     })
 }
 
+/// Extracts OGG Vorbis comments and optional embedded artwork.
 pub fn extract_ogg_metadata(
     path: &Path,
     file_name: String,
@@ -188,7 +588,7 @@ pub fn extract_ogg_metadata(
     format_specific.insert("format".to_string(), serde_json::json!("OGG"));
 
     let bytes = std::fs::read(path).map_err(|e| format!("Failed to read OGG file: {}", e))?;
-    
+
     // Parse Vorbis comments from OGG file
     if let Ok(comments) = parse_ogg_vorbis_comments_internal(&bytes) {
         for comment in comments {
@@ -199,7 +599,7 @@ pub fn extract_ogg_metadata(
             }
         }
     }
-    
+
     // Try to extract cover art
     if let Ok(picture_data) = extract_ogg_picture(path) {
         use base64::Engine;
@@ -231,57 +631,60 @@ fn parse_ogg_vorbis_comments_internal(bytes: &[u8]) -> Result<Vec<FlacVorbisComm
         .windows(search_pattern.len())
         .position(|w| w == search_pattern)
         .ok_or_else(|| "No vorbis comment packet found".to_string())?;
-    
+
     let mut offset = packet_pos + 7;
     let mut comments = Vec::new();
-    
+
     if offset + 4 > bytes.len() {
         return Err("Insufficient data for vendor length".to_string());
     }
-    
+
     let vendor_len = u32::from_le_bytes(
-        bytes[offset..offset+4].try_into()
-            .map_err(|_| "Failed to parse vendor length".to_string())?
+        bytes[offset..offset + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse vendor length".to_string())?,
     ) as usize;
     offset += 4 + vendor_len;
-    
+
     if offset + 4 > bytes.len() {
         return Err("Insufficient data for comment count".to_string());
     }
-    
+
     let num_comments = u32::from_le_bytes(
-        bytes[offset..offset+4].try_into()
-            .map_err(|_| "Failed to parse comment count".to_string())?
+        bytes[offset..offset + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse comment count".to_string())?,
     ) as usize;
     offset += 4;
-    
+
     for _ in 0..num_comments {
         if offset + 4 > bytes.len() {
             break;
         }
-        
+
         let comment_len = u32::from_le_bytes(
-            bytes[offset..offset+4].try_into()
-                .map_err(|_| "Failed to parse comment length".to_string())?
+            bytes[offset..offset + 4]
+                .try_into()
+                .map_err(|_| "Failed to parse comment length".to_string())?,
         ) as usize;
         offset += 4;
-        
+
         if offset + comment_len > bytes.len() {
             break;
         }
-        
-        let comment_bytes = &bytes[offset..offset+comment_len];
+
+        let comment_bytes = &bytes[offset..offset + comment_len];
         offset += comment_len;
-        
+
         if let Ok(comment_str) = std::str::from_utf8(comment_bytes) {
             if let Some(eq_pos) = comment_str.find('=') {
                 let name = comment_str[..eq_pos].to_uppercase();
-                let value = comment_str[eq_pos+1..].as_bytes().to_vec();
+                let value = comment_str[eq_pos + 1..].as_bytes().to_vec();
                 comments.push(FlacVorbisComment { name, value });
             }
         }
     }
-    
+
     Ok(comments)
 }
 
@@ -344,7 +747,9 @@ pub fn find_flac_embedded_json_matches(bytes: &[u8]) -> Result<Vec<FlacJsonMatch
     let mut matches = Vec::new();
     let mut next_id = 0usize;
     for comment in comments {
-        if let Some((value, encoding, payload)) = decode_json_payload(&String::from_utf8_lossy(&comment.value)) {
+        if let Some((value, encoding, payload)) =
+            decode_json_payload(&String::from_utf8_lossy(&comment.value))
+        {
             matches.push(FlacJsonMatch {
                 id: next_id,
                 label: comment.name.clone(),
@@ -370,7 +775,11 @@ pub fn flac_has_embedded_json(bytes: &[u8]) -> Result<bool, String> {
     Ok(false)
 }
 
-pub fn update_flac_embedded_json(path: &Path, entry_id: usize, json_text: &str) -> Result<(), String> {
+pub fn update_flac_embedded_json(
+    path: &Path,
+    entry_id: usize,
+    json_text: &str,
+) -> Result<(), String> {
     let mut bytes = std::fs::read(path).map_err(|e| format!("Failed to read FLAC file: {}", e))?;
     let mut pos = 4;
     while pos + 4 <= bytes.len() {
@@ -400,7 +809,11 @@ pub fn update_flac_embedded_json(path: &Path, entry_id: usize, json_text: &str) 
         .ok_or_else(|| "Failed to parse Vorbis comment block".to_string())?;
 
     if entry_id >= comments.len() {
-        return Err(format!("Entry ID {} out of range (0-{})", entry_id, comments.len() - 1));
+        return Err(format!(
+            "Entry ID {} out of range (0-{})",
+            entry_id,
+            comments.len() - 1
+        ));
     }
 
     let target_comment = &comments[entry_id];
@@ -441,10 +854,14 @@ pub fn update_flac_embedded_json(path: &Path, entry_id: usize, json_text: &str) 
             let comment_end = comment_pos + comment_len;
             vorbis_data.splice(comment_pos..comment_end, new_comment_bytes.iter().copied());
 
-            bytes.splice(vorbis_data_start..vorbis_block_end, vorbis_data.iter().copied());
+            bytes.splice(
+                vorbis_data_start..vorbis_block_end,
+                vorbis_data.iter().copied(),
+            );
 
             let old_block_len = synchsafe_to_u32(&bytes[pos..pos + 4]);
-            let new_block_len = old_block_len + (new_comment_bytes.len() as isize - comment_len as isize) as u32;
+            let new_block_len =
+                old_block_len + (new_comment_bytes.len() as isize - comment_len as isize) as u32;
             bytes[pos + 1..pos + 5].copy_from_slice(&u32_to_synchsafe(new_block_len));
 
             write_with_backup(path, &bytes)?;
@@ -458,7 +875,8 @@ pub fn update_flac_embedded_json(path: &Path, entry_id: usize, json_text: &str) 
 }
 
 pub fn extract_mp3_cover(path: &Path) -> Result<Vec<u8>, String> {
-    let tag = id3::Tag::read_from_path(path).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+    let tag =
+        id3::Tag::read_from_path(path).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
     let picture = tag
         .pictures()
         .next()
@@ -483,14 +901,26 @@ pub fn extract_flac_picture(path: &Path) -> Result<Vec<u8>, String> {
 pub fn parse_flac_picture_block(data: &[u8]) -> Result<Vec<u8>, String> {
     let mut pos = 0;
     pos += 4;
-    let mime_len = u32::from_be_bytes(data[pos..pos + 4].try_into().map_err(|_| "Failed to read mime length")?) as usize;
+    let mime_len = u32::from_be_bytes(
+        data[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Failed to read mime length")?,
+    ) as usize;
     pos += 4 + mime_len;
 
-    let desc_len = u32::from_be_bytes(data[pos..pos + 4].try_into().map_err(|_| "Failed to read desc length")?) as usize;
+    let desc_len = u32::from_be_bytes(
+        data[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Failed to read desc length")?,
+    ) as usize;
     pos += 4 + desc_len;
 
     pos += 16;
-    let data_len = u32::from_be_bytes(data[pos..pos + 4].try_into().map_err(|_| "Failed to read picture data length")?) as usize;
+    let data_len = u32::from_be_bytes(
+        data[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Failed to read picture data length")?,
+    ) as usize;
     pos += 4;
 
     if pos + data_len > data.len() {
@@ -501,94 +931,104 @@ pub fn parse_flac_picture_block(data: &[u8]) -> Result<Vec<u8>, String> {
 
 pub fn extract_ogg_picture(path: &Path) -> Result<Vec<u8>, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
-    
+
     // Find vorbis comment packet (03 followed by 'vorbis')
     let search_pattern = b"\x03vorbis";
     let packet_pos = bytes
         .windows(search_pattern.len())
         .position(|w| w == search_pattern)
         .ok_or_else(|| "No vorbis comment packet found".to_string())?;
-    
+
     let mut offset = packet_pos + 7; // skip \x03vorbis
-    
+
     if offset + 4 > bytes.len() {
         return Err("Insufficient data for vendor length".to_string());
     }
-    
+
     // vendor length (little-endian)
     let vendor_len = u32::from_le_bytes(
-        bytes[offset..offset+4].try_into()
-            .map_err(|_| "Failed to parse vendor length".to_string())?
+        bytes[offset..offset + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse vendor length".to_string())?,
     ) as usize;
     offset += 4 + vendor_len;
-    
+
     if offset + 4 > bytes.len() {
         return Err("Insufficient data for comment count".to_string());
     }
-    
+
     // num comments (little-endian)
     let num_comments = u32::from_le_bytes(
-        bytes[offset..offset+4].try_into()
-            .map_err(|_| "Failed to parse comment count".to_string())?
+        bytes[offset..offset + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse comment count".to_string())?,
     ) as usize;
     offset += 4;
-    
+
     // Parse comments looking for METADATA_BLOCK_PICTURE
     for _ in 0..num_comments {
         if offset + 4 > bytes.len() {
             break;
         }
-        
+
         let comment_len = u32::from_le_bytes(
-            bytes[offset..offset+4].try_into()
-                .map_err(|_| "Failed to parse comment length".to_string())?
+            bytes[offset..offset + 4]
+                .try_into()
+                .map_err(|_| "Failed to parse comment length".to_string())?,
         ) as usize;
         offset += 4;
-        
+
         if offset + comment_len > bytes.len() {
             break;
         }
-        
-        let comment_bytes = &bytes[offset..offset+comment_len];
+
+        let comment_bytes = &bytes[offset..offset + comment_len];
         offset += comment_len;
-        
+
         // Look for METADATA_BLOCK_PICTURE= pattern
         if comment_bytes.len() >= 23 {
             // Try to find the = sign
             for eq_idx in 22..comment_bytes.len() {
-                if comment_bytes[eq_idx] == b'=' && &comment_bytes[..eq_idx] == b"METADATA_BLOCK_PICTURE" {
+                if comment_bytes[eq_idx] == b'='
+                    && &comment_bytes[..eq_idx] == b"METADATA_BLOCK_PICTURE"
+                {
                     // Found it! Extract the value part
-                    let value_bytes = &comment_bytes[eq_idx+1..];
-                    
+                    let value_bytes = &comment_bytes[eq_idx + 1..];
+
                     // Convert to string and clean it up
                     if let Ok(value_str) = std::str::from_utf8(value_bytes) {
-                        let cleaned = value_str.chars()
+                        let cleaned = value_str
+                            .chars()
                             .filter(|c| c.is_alphanumeric() || *c == '+' || *c == '/' || *c == '=')
                             .collect::<String>();
-                        
+
                         if !cleaned.is_empty() {
-                            if let Ok(pic_bytes) = base64::engine::general_purpose::STANDARD.decode(cleaned) {
-                                if let Ok(pic_data) = try_extract_picture_from_flac_block(&pic_bytes) {
+                            if let Ok(pic_bytes) =
+                                base64::engine::general_purpose::STANDARD.decode(cleaned)
+                            {
+                                if let Ok(pic_data) =
+                                    try_extract_picture_from_flac_block(&pic_bytes)
+                                {
                                     return Ok(pic_data);
                                 }
                             }
                         }
                     }
-                    
+
                     // Fallback: try raw bytes as FLAC block
                     if value_bytes.len() >= 32 {
                         if let Ok(pic_data) = try_extract_picture_from_flac_block(value_bytes) {
                             return Ok(pic_data);
                         }
                     }
-                    
+
                     // Continue to next comment if all attempts failed
                     continue;
                 }
             }
         }
     }
-    
+
     Err("No embedded cover art found in OGG".to_string())
 }
 
@@ -596,47 +1036,51 @@ fn try_extract_picture_from_flac_block(pic_bytes: &[u8]) -> Result<Vec<u8>, Stri
     if pic_bytes.len() < 32 {
         return Err("Picture block too short".to_string());
     }
-    
+
     let _picture_type = u32::from_be_bytes(
-        pic_bytes[0..4].try_into()
-            .map_err(|_| "Failed to parse picture type".to_string())?
+        pic_bytes[0..4]
+            .try_into()
+            .map_err(|_| "Failed to parse picture type".to_string())?,
     );
-    
+
     let mime_len = u32::from_be_bytes(
-        pic_bytes[4..8].try_into()
-            .map_err(|_| "Failed to parse mime length".to_string())?
+        pic_bytes[4..8]
+            .try_into()
+            .map_err(|_| "Failed to parse mime length".to_string())?,
     ) as usize;
-    
+
     let mut pic_offset = 8 + mime_len;
-    
+
     if pic_offset + 4 > pic_bytes.len() {
         return Err("Insufficient data for description length".to_string());
     }
-    
+
     let desc_len = u32::from_be_bytes(
-        pic_bytes[pic_offset..pic_offset+4].try_into()
-            .map_err(|_| "Failed to parse description length".to_string())?
+        pic_bytes[pic_offset..pic_offset + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse description length".to_string())?,
     ) as usize;
     pic_offset += 4 + desc_len;
-    
+
     // Skip width, height, depth, colors (4 bytes each)
     pic_offset += 16;
-    
+
     if pic_offset + 4 > pic_bytes.len() {
         return Err("Insufficient data for picture data length".to_string());
     }
-    
+
     let pic_data_len = u32::from_be_bytes(
-        pic_bytes[pic_offset..pic_offset+4].try_into()
-            .map_err(|_| "Failed to parse picture data length".to_string())?
+        pic_bytes[pic_offset..pic_offset + 4]
+            .try_into()
+            .map_err(|_| "Failed to parse picture data length".to_string())?,
     ) as usize;
     pic_offset += 4;
-    
+
     if pic_offset + pic_data_len > pic_bytes.len() {
         return Err("Picture data extends beyond block".to_string());
     }
-    
-    Ok(pic_bytes[pic_offset..pic_offset+pic_data_len].to_vec())
+
+    Ok(pic_bytes[pic_offset..pic_offset + pic_data_len].to_vec())
 }
 
 fn decode_metadata_block_picture_value(raw: &[u8]) -> Option<Vec<u8>> {
@@ -670,13 +1114,21 @@ pub fn parse_ogg_picture_raw(comment_value: &[u8]) -> Result<Vec<u8>, String> {
     if pos + 4 > comment_value.len() {
         return Err("Too short for mime len".into());
     }
-    let mime_len = u32::from_be_bytes(comment_value[pos..pos + 4].try_into().map_err(|_| "Too short for mime len")?) as usize;
+    let mime_len = u32::from_be_bytes(
+        comment_value[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Too short for mime len")?,
+    ) as usize;
     pos += 4 + mime_len;
 
     if pos + 4 > comment_value.len() {
         return Err("Too short for desc len".into());
     }
-    let desc_len = u32::from_be_bytes(comment_value[pos..pos + 4].try_into().map_err(|_| "Too short for desc len")?) as usize;
+    let desc_len = u32::from_be_bytes(
+        comment_value[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Too short for desc len")?,
+    ) as usize;
     pos += 4 + desc_len;
 
     if pos + 16 > comment_value.len() {
@@ -687,16 +1139,25 @@ pub fn parse_ogg_picture_raw(comment_value: &[u8]) -> Result<Vec<u8>, String> {
     if pos + 4 > comment_value.len() {
         return Err("Too short for data len".into());
     }
-    let data_len = u32::from_be_bytes(comment_value[pos..pos + 4].try_into().map_err(|_| "Too short for data len")?) as usize;
+    let data_len = u32::from_be_bytes(
+        comment_value[pos..pos + 4]
+            .try_into()
+            .map_err(|_| "Too short for data len")?,
+    ) as usize;
     pos += 4;
 
     if pos + data_len > comment_value.len() {
-        return Err(format!("Incomplete picture data: need {}, have {}", data_len, comment_value.len() - pos));
+        return Err(format!(
+            "Incomplete picture data: need {}, have {}",
+            data_len,
+            comment_value.len() - pos
+        ));
     }
 
     Ok(comment_value[pos..pos + data_len].to_vec())
 }
 
+/// Generates a bounded-size cover thumbnail for audio formats that embed artwork.
 pub fn generate_audio_cover(file_path: &str, max_size: u32) -> Result<String, String> {
     let path = Path::new(file_path);
     let extension = path
@@ -718,7 +1179,10 @@ pub fn generate_audio_cover(file_path: &str, max_size: u32) -> Result<String, St
     let thumbnail = image.thumbnail(max_size, max_size);
     let mut buffer = Vec::new();
     thumbnail
-        .write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Png)
+        .write_to(
+            &mut std::io::Cursor::new(&mut buffer),
+            image::ImageFormat::Png,
+        )
         .map_err(|e| format!("Failed to encode cover thumbnail: {}", e))?;
 
     use base64::Engine;
@@ -728,6 +1192,7 @@ pub fn generate_audio_cover(file_path: &str, max_size: u32) -> Result<String, St
     ))
 }
 
+/// Returns one in-memory audio data URL for frontend preview playback.
 pub fn get_audio_data_url(file_path: &str, max_bytes: usize) -> Result<String, String> {
     let path = Path::new(file_path);
     let ext = path
@@ -746,7 +1211,8 @@ pub fn get_audio_data_url(file_path: &str, max_bytes: usize) -> Result<String, S
         _ => return Err("Audio preview not supported for this extension".to_string()),
     };
 
-    let metadata = fs::metadata(path).map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    let metadata =
+        fs::metadata(path).map_err(|e| format!("Failed to read file metadata: {}", e))?;
     let file_size = metadata.len() as usize;
 
     if file_size == 0 {
@@ -777,25 +1243,67 @@ pub fn find_mp3_embedded_json_matches(tag: &id3::Tag) -> Result<Vec<Mp3JsonMatch
         match frame.content() {
             id3::Content::Text(text) => {
                 if let Some((value, encoding, payload)) = decode_json_payload(text) {
-                    matches.push(Mp3JsonMatch { id: next_id, label: frame_id.clone(), payload, decoded_json: value, encoding, frame_kind: Mp3FrameKind::Text { frame_id: frame_id.clone() } });
+                    matches.push(Mp3JsonMatch {
+                        id: next_id,
+                        label: frame_id.clone(),
+                        payload,
+                        decoded_json: value,
+                        encoding,
+                        frame_kind: Mp3FrameKind::Text {
+                            frame_id: frame_id.clone(),
+                        },
+                    });
                     next_id += 1;
                 }
             }
             id3::Content::ExtendedText(ext) => {
                 if let Some((value, encoding, payload)) = decode_json_payload(&ext.value) {
-                    matches.push(Mp3JsonMatch { id: next_id, label: if ext.description.is_empty() { "TXXX".to_string() } else { format!("TXXX:{}", ext.description) }, payload, decoded_json: value, encoding, frame_kind: Mp3FrameKind::ExtendedText { description: ext.description.clone() }});
+                    matches.push(Mp3JsonMatch {
+                        id: next_id,
+                        label: if ext.description.is_empty() {
+                            "TXXX".to_string()
+                        } else {
+                            format!("TXXX:{}", ext.description)
+                        },
+                        payload,
+                        decoded_json: value,
+                        encoding,
+                        frame_kind: Mp3FrameKind::ExtendedText {
+                            description: ext.description.clone(),
+                        },
+                    });
                     next_id += 1;
                 }
             }
             id3::Content::Comment(comment) => {
                 if let Some((value, encoding, payload)) = decode_json_payload(&comment.text) {
-                    matches.push(Mp3JsonMatch { id: next_id, label: format!("COMM:{}:{}", comment.lang, comment.description), payload, decoded_json: value, encoding, frame_kind: Mp3FrameKind::Comment { lang: comment.lang.clone(), description: comment.description.clone() }});
+                    matches.push(Mp3JsonMatch {
+                        id: next_id,
+                        label: format!("COMM:{}:{}", comment.lang, comment.description),
+                        payload,
+                        decoded_json: value,
+                        encoding,
+                        frame_kind: Mp3FrameKind::Comment {
+                            lang: comment.lang.clone(),
+                            description: comment.description.clone(),
+                        },
+                    });
                     next_id += 1;
                 }
             }
             id3::Content::Lyrics(lyrics) => {
                 if let Some((value, encoding, payload)) = decode_json_payload(&lyrics.text) {
-                    matches.push(Mp3JsonMatch { id: next_id, label: format!("USLT:{}:{}", lyrics.lang, lyrics.description), payload, decoded_json: value, encoding, frame_kind: Mp3FrameKind::Lyrics { lang: lyrics.lang.clone(), description: lyrics.description.clone() }});
+                    matches.push(Mp3JsonMatch {
+                        id: next_id,
+                        label: format!("USLT:{}:{}", lyrics.lang, lyrics.description),
+                        payload,
+                        decoded_json: value,
+                        encoding,
+                        frame_kind: Mp3FrameKind::Lyrics {
+                            lang: lyrics.lang.clone(),
+                            description: lyrics.description.clone(),
+                        },
+                    });
                     next_id += 1;
                 }
             }
@@ -879,7 +1387,20 @@ pub fn find_mp3_json_matches_from_raw_id3(bytes: &[u8]) -> Result<Vec<Mp3JsonMat
         if frame_id == "TXXX" {
             if let Some((_description, text)) = parse_txxx_value(data) {
                 if let Some((value, encoding, payload)) = decode_json_payload(&text) {
-                    matches.push(Mp3JsonMatch { id: next_id, label: if _description.is_empty() { "TXXX".to_string() } else { format!("TXXX:{}", _description) }, payload, decoded_json: value, encoding, frame_kind: Mp3FrameKind::ExtendedText { description: _description } });
+                    matches.push(Mp3JsonMatch {
+                        id: next_id,
+                        label: if _description.is_empty() {
+                            "TXXX".to_string()
+                        } else {
+                            format!("TXXX:{}", _description)
+                        },
+                        payload,
+                        decoded_json: value,
+                        encoding,
+                        frame_kind: Mp3FrameKind::ExtendedText {
+                            description: _description,
+                        },
+                    });
                     next_id += 1;
                 }
             }
@@ -889,7 +1410,16 @@ pub fn find_mp3_json_matches_from_raw_id3(bytes: &[u8]) -> Result<Vec<Mp3JsonMat
         if frame_id.starts_with('T') && frame_id != "TXXX" {
             if let Some(text) = parse_text_frame_value(data) {
                 if let Some((value, encoding, payload)) = decode_json_payload(&text) {
-                    matches.push(Mp3JsonMatch { id: next_id, label: format!("{}:raw-fallback", frame_id), payload, decoded_json: value, encoding, frame_kind: Mp3FrameKind::Text { frame_id: frame_id.clone() } });
+                    matches.push(Mp3JsonMatch {
+                        id: next_id,
+                        label: format!("{}:raw-fallback", frame_id),
+                        payload,
+                        decoded_json: value,
+                        encoding,
+                        frame_kind: Mp3FrameKind::Text {
+                            frame_id: frame_id.clone(),
+                        },
+                    });
                     next_id += 1;
                 }
             }
@@ -959,11 +1489,18 @@ pub fn mp3_raw_has_embedded_json(bytes: &[u8]) -> Result<bool, String> {
     Ok(false)
 }
 
-pub fn update_mp3_embedded_json(path: &Path, entry_id: usize, json_text: &str) -> Result<(), String> {
-    let new_json_value: serde_json::Value = serde_json::from_str(json_text).map_err(|e| format!("Invalid JSON: {}", e))?;
-    let new_json_compact = serde_json::to_string(&new_json_value).map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+pub fn update_mp3_embedded_json(
+    path: &Path,
+    entry_id: usize,
+    json_text: &str,
+) -> Result<(), String> {
+    let new_json_value: serde_json::Value =
+        serde_json::from_str(json_text).map_err(|e| format!("Invalid JSON: {}", e))?;
+    let new_json_compact = serde_json::to_string(&new_json_value)
+        .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
 
-    let mut tag = id3::Tag::read_from_path(path).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
+    let mut tag =
+        id3::Tag::read_from_path(path).map_err(|e| format!("Failed to read ID3 tag: {}", e))?;
     let mut matches = find_mp3_embedded_json_matches(&tag)?;
     if matches.is_empty() {
         let bytes = fs::read(path).map_err(|e| format!("Failed to read MP3 file: {}", e))?;

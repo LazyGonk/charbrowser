@@ -1,7 +1,7 @@
 {
   "productName": "CharBrowser",
-  "version": "0.1.4",
-  "identifier": "com.charbrowser",
+  "version": "0.2.0",
+  "identifier": "charbrowser",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -31,7 +31,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:1234 https://*"
     }
   }
 }

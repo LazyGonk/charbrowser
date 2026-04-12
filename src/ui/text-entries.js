@@ -42,6 +42,14 @@ export async function loadTextEntries(filePath, ext) {
 
         state.textEntries = entries;
 
+        // Hide plaintext section if embedded JSON exists - avoid redundant display
+        if (state.embeddedJsonEntries && state.embeddedJsonEntries.length > 0) {
+            if (dom.textEntriesStatus) {
+                dom.textEntriesStatus.textContent = '';
+            }
+            return;
+        }
+
         if (dom.textEntriesSection) {
             dom.textEntriesSection.style.display = 'flex';
         }

@@ -44,6 +44,7 @@ pub fn iter_flac_blocks<'a>(bytes: &'a [u8], start_offset: usize) -> FlacBlockIt
     FlacBlockIterator { bytes, pos: start_offset }
 }
 
+/// Extracts image metadata and optional format-specific blocks (EXIF/PNG chunks).
 pub fn extract_image_metadata(
     path: &Path,
     file_name: String,
@@ -135,6 +136,7 @@ pub fn extract_png_chunks(path: &Path) -> Result<serde_json::Value, String> {
     Ok(serde_json::Value::Object(chunks))
 }
 
+/// Generates a PNG thumbnail data URL for one image file.
 pub fn generate_thumbnail(file_path: &str, max_size: u32) -> Result<String, String> {
     let path = Path::new(file_path);
 

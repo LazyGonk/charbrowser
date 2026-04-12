@@ -7,6 +7,7 @@ import {
     getFileMetadata,
     getTextEntries,
     hasEmbeddedJson,
+    updateFileMetadataFields,
 } from './tauri-api.js';
 
 /**
@@ -15,6 +16,15 @@ import {
  */
 export function loadFileMetadataData(filePath) {
     return getFileMetadata(filePath);
+}
+
+/**
+ * Writes editable metadata field updates for one file.
+ * @param {string} filePath
+ * @param {Record<string, string>} updates
+ */
+export function updateMetadataFieldsData(filePath, updates) {
+    return updateFileMetadataFields({ filePath, updates });
 }
 
 /**

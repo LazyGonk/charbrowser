@@ -67,3 +67,68 @@ pub fn write_with_backup(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let _ = std::fs::remove_file(&backup_path);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_path(file_name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!("charbrowser-{}-{}", nanos, file_name))
+    }
+
+    #[test]
+    fn synchsafe_to_u32_returns_zero_for_short_input() {
+        assert_eq!(synchsafe_to_u32(&[]), 0);
+        assert_eq!(synchsafe_to_u32(&[0x7F, 0x7F, 0x7F]), 0);
+    }
+
+    #[test]
+    fn synchsafe_24_to_u32_returns_zero_for_short_input() {
+        assert_eq!(synchsafe_24_to_u32(&[]), 0);
+        assert_eq!(synchsafe_24_to_u32(&[0x01, 0x02]), 0);
+    }
+
+    #[test]
+    fn synchsafe_round_trip_preserves_masked_value() {
+        let value = 0x0FABCDE1;
+        let encoded = u32_to_synchsafe(value);
+        let decoded = synchsafe_to_u32(&encoded);
+        assert_eq!(decoded, value & SYNCHSAFE_MASK);
+    }
+
+    #[test]
+    fn synchsafe_24_parses_expected_value() {
+        let bytes = [0x12, 0x34, 0x56];
+        assert_eq!(synchsafe_24_to_u32(&bytes), 0x123456);
+    }
+
+    #[test]
+    fn build_backup_path_preserves_file_stem_and_adds_backup_suffix() {
+        let input = Path::new("sample.png");
+        let backup = build_backup_path(input);
+        let backup_name = backup.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        assert!(backup_name.contains("sample"));
+        assert!(backup_name.contains("charbrowser"));
+        assert!(backup_name.ends_with(".bak"));
+    }
+
+    #[test]
+    fn write_with_backup_rewrites_file_contents() {
+        let path = unique_temp_path("write_with_backup.bin");
+        fs::write(&path, b"old-bytes").expect("seed file write should succeed");
+
+        write_with_backup(&path, b"new-bytes").expect("write_with_backup should succeed");
+
+        let updated = fs::read(&path).expect("updated file should be readable");
+        assert_eq!(updated, b"new-bytes");
+
+        let _ = fs::remove_file(&path);
+    }
+}

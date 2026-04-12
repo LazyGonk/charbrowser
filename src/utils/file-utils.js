@@ -7,12 +7,21 @@ import { AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS } from '../constants.js';
  * @returns {string} Extension without leading dot, or empty string.
  */
 export function getExtension(filePath) {
-    const fileName = filePath.split(/[\\/]/).pop() || '';
+    const fileName = getFileName(filePath);
     const idx = fileName.lastIndexOf('.');
     if (idx === -1) {
         return '';
     }
     return fileName.slice(idx + 1).toLowerCase();
+}
+
+/**
+ * Extracts a file name from an absolute or relative path.
+ * @param {string} filePath
+ * @returns {string}
+ */
+export function getFileName(filePath) {
+    return String(filePath).split(/[\\/]/).pop() || '';
 }
 
 /**

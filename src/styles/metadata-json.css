@@ -1,0 +1,298 @@
+/* Metadata panel and embedded JSON editor/tree styling. */
+:root {
+    --json-warning-border: rgba(255, 194, 102, 0.35);
+    --json-warning-bg: rgba(255, 194, 102, 0.08);
+    --json-warning-text: #f2c27b;
+    --json-key-color: #9cdcfe;
+    --json-string-color: #ce9178;
+    --json-number-color: #b5cea8;
+    --json-primitive-color: #569cd6;
+    --json-focus-color: #6bb6ff;
+    --json-error-color: #ff6b6b;
+}
+
+body.light-mode {
+    --json-warning-border: rgba(205, 136, 0, 0.35);
+    --json-warning-bg: rgba(205, 136, 0, 0.08);
+    --json-warning-text: #8a5b00;
+    --json-key-color: #0451a5;
+    --json-string-color: #a31515;
+    --json-number-color: #098658;
+    --json-primitive-color: #0000ff;
+    --json-focus-color: #0078d4;
+    --json-error-color: #d13438;
+}
+
+.metadata-header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.metadata-header-container h2 {
+    flex: 1;
+    margin: 0;
+}
+
+.metadata-content {
+    display: grid;
+    gap: 12px;
+}
+
+.metadata-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 12px;
+    padding: 8px;
+    background: var(--bg-elevated);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+}
+
+.metadata-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.metadata-value {
+    color: var(--text-primary);
+    font-size: 13px;
+    word-break: break-all;
+}
+
+.metadata-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.metadata-section h3 {
+    font-size: 14px;
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.metadata-video-json-notice {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--json-warning-border);
+    background: var(--json-warning-bg);
+    color: var(--json-warning-text);
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.metadata-editor-grid {
+    display: grid;
+    gap: 8px;
+}
+
+.metadata-editor-row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 10px;
+    align-items: center;
+}
+
+.embedded-json-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.embedded-json-section h3 {
+    font-size: 14px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.embedded-json-section label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.embedded-json-filter-row {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 10px;
+    align-items: end;
+}
+
+.embedded-json-filter-item {
+    display: grid;
+    gap: 6px;
+}
+
+.embedded-json-select,
+.embedded-json-text-filter,
+.json-editor {
+    width: 100%;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+}
+
+.embedded-json-select {
+    min-height: 34px;
+}
+
+.json-payload-preview {
+    font-family: Consolas, Monaco, monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    overflow: auto;
+    max-height: 60px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.json-tree {
+    font-family: Consolas, Monaco, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    overflow: auto;
+    max-height: 400px;
+}
+
+.json-tree-node {
+    position: relative;
+}
+
+.json-tree-row {
+    display: flex;
+    align-items: flex-start;
+    padding: 2px 0;
+    gap: 4px;
+}
+
+.json-tree-toggle {
+    cursor: pointer;
+    user-select: none;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.4;
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+}
+
+.json-tree-toggle:hover {
+    color: var(--text-primary);
+}
+
+.json-tree-key {
+    color: var(--json-key-color);
+    flex-shrink: 0;
+}
+
+.json-tree-colon {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.json-tree-value {
+    flex: 1;
+    min-width: 0;
+}
+
+.json-tree-value.string {
+    color: var(--json-string-color);
+}
+
+.json-tree-value.number {
+    color: var(--json-number-color);
+}
+
+.json-tree-value.boolean {
+    color: var(--json-primitive-color);
+}
+
+.json-tree-value.null {
+    color: var(--json-primitive-color);
+}
+
+.json-tree-value.object,
+.json-tree-value.array {
+    color: var(--text-secondary);
+}
+
+.json-tree-value.editable {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 4px;
+    outline: none;
+    min-width: 100px;
+    resize: horizontal;
+    overflow: auto;
+}
+
+.json-tree-value.editable:focus {
+    border-color: var(--json-focus-color);
+}
+
+.json-tree-value.editable.error {
+    border-color: var(--json-error-color);
+}
+
+.json-tree-children {
+    padding-left: 20px;
+    display: none;
+}
+
+.json-tree-children.expanded {
+    display: block;
+}
+
+.json-tree-comma {
+    color: var(--text-secondary);
+}
+
+.embedded-json-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.embedded-json-status {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+    .metadata-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+
+    .metadata-editor-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+
+    .embedded-json-filter-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+}
+

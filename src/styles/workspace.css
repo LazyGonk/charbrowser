@@ -1,0 +1,4 @@
+/* Workspace stylesheet entrypoint: preserve order across sidebar, preview, and editor. */
+@import './sidebar.css';
+@import './preview.css';
+@import './card-editor.css';

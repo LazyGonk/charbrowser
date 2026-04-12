@@ -23,6 +23,8 @@ General-purpose - handles development, code review, and maintenance tasks.
 ├──────────┬────────────────┼─────────────────────────────────┤
 │  File    │◄── Tauri Invoke►│  main.rs (Tauri Commands)      │
 │  Browser │                 │  ├─────────────────────────────┤
+│  Card   │◄────────────��─►│  │ llm_history (LLM history)   │
+│  Editor │                 │  ├─────────────────────────────┤
 │          │                 │  │ metadata/                   │
 │  Preview │◄────────────────┼─►│ mod.rs    (Orchestrator)    │
 │  Panel   │                 │  ├────┬──────┬──────┬─────────┤
@@ -34,6 +36,12 @@ General-purpose - handles development, code review, and maintenance tasks.
 │  Embedded│◄────────────────┼─►embedded.rs                   │
 │  JSON    │                 │                                 │
 └──────────┴─────────────────┴─────────────────────────────────┘
+          ▲                                    ▲
+          │                                    │
+        User                              File System
+
+LLM Service (src/services/llm-service.js) - OpenAI-compatible API
+ComfyUI Service (src/services/comfyui-service.js) - Workflow execution
 ```
 
 ### Module Organization
@@ -42,14 +50,24 @@ General-purpose - handles development, code review, and maintenance tasks.
 |-------|--------|----------|
 | Frontend | `src/main.js` | Minimal entrypoint that boots the app |
 | Frontend | `src/init.js` | App orchestration: wiring services, UI modules, and startup |
-| Frontend | `src/ui/*` | Focused UI modules (folder view, preview, metadata, JSON editor, dialogs) |
+| Frontend | `src/ui/card-editor.js` | Character card creation/editing with LLM generation |
+| Frontend | `src/ui/folder-view.js` | File browser and list management |
+| Frontend | `src/ui/drag-drop.js` | Native/browser drag-drop routing for files, images, JSON, and folders |
+| Frontend | `src/ui/preview.js` | Media preview panel |
+| Frontend | `src/ui/metadata-panel.js` | Metadata display panel |
+| Frontend | `src/ui/settings-modal.js` | Settings configuration modal |
+| Frontend | `src/services/llm-service.js` | OpenAI-compatible LLM API communication |
+| Frontend | `src/services/comfyui-service.js` | ComfyUI workflow execution |
+| Frontend | `src/services/tauri-api.js` | Tauri invoke wrappers plus native path inspection helpers |
+| Frontend | `src/services/settings-service.js` | Settings persistence |
 | Frontend | `src/services/*` | Backend invoke wrappers and frontend business logic services |
 | Frontend | `src/utils/*` | Pure utility helpers for file, JSON, and metadata operations |
 | Frontend | `src/state.js` | Centralized application state and cache management |
 | Backend | `src-tauri/src/main.rs` | Tauri entry point, command definitions |
+| Backend | `src-tauri/src/llm_history.rs` | LLM iteration history persisted during runtime and cleared on app exit |
 | Backend | `src-tauri/src/metadata/mod.rs` | Metadata extraction orchestration by file type |
 | Backend | `src-tauri/src/metadata/types.rs` | Struct definitions for metadata serialization |
-| Backend | `src-tauri/src/metadata/embedded.rs` | Embedded JSON detection and editing |
+| Backend | `src-tauri/src/metadata/embedded.rs` | Embedded JSON detection, editing, PNG card creation |
 | Backend | `src-tauri/src/metadata/image.rs` | Image metadata, PNG chunks, EXIF, thumbnails |
 | Backend | `src-tauri/src/metadata/audio.rs` | MP3/FLAC/OGG/WAV metadata extraction |
 | Backend | `src-tauri/src/metadata/video.rs` | MP4/MOV/AVI/MKV metadata extraction |
@@ -114,6 +132,8 @@ npm run licenses:generate
 - Prefer composition over inheritance; define clear module boundaries and interfaces.
 - Minimize cross-module dependencies; consider future extensibility when designing new features.
 
+**Note**: Frontend modularization is complete. `src/main.js` serves as a thin entrypoint; feature logic lives in `src/init.js`, `src/ui/*`, `src/services/*`, and `src/utils/*`. LLM integration (llm-service.js) and ComfyUI integration (comfyui-service.js) are now available.
+
 ---
 
 ## Security
@@ -128,6 +148,7 @@ npm run licenses:generate
 - Update `CONTRIBUTING.md` for development workflow changes
 - Update `docs/MAINTAINING.md` for release/maintenance changes
 - Regenerate licenses: `npm run licenses:generate`
+- See [`plans/developer-documentation.md`](plans/developer-documentation.md) for comprehensive documentation guidelines
 
 ---
 

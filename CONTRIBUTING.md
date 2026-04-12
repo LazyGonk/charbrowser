@@ -83,5 +83,5 @@ npm run licenses:generate
 
 - GitHub Actions builds releases for **Windows**, **macOS**, **Linux**
 - Windows: portable exe only (no installer)
-- Trigger: push version tag (e.g., `v0.1.0`) or run Release workflow manually
+- Trigger: push version tag (e.g., `v0.2.0`) or run Release workflow manually
 - Releases created as drafts for review

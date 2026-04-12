@@ -66,6 +66,9 @@ export function initEmbeddedJsonUI(options) {
                 jsonText: prettyEdited,
             };
 
+            if (dom.jsonDiffTitle) dom.jsonDiffTitle.textContent = 'Review JSON Changes';
+            if (dom.jsonDiffOriginalLabel) dom.jsonDiffOriginalLabel.textContent = 'Original';
+            if (dom.jsonDiffEditedLabel) dom.jsonDiffEditedLabel.textContent = 'Edited';
             dom.jsonDiffOriginal.textContent = prettyOriginal;
             dom.jsonDiffEdited.textContent = prettyEdited;
             dom.jsonDiffSummary.textContent = summary;
@@ -77,7 +80,6 @@ export function initEmbeddedJsonUI(options) {
 
     dom.confirmJsonSaveBtn?.addEventListener('click', async () => {
         if (!state.pendingEmbeddedJsonSave) {
-            dom.jsonDiffModal.style.display = 'none';
             return;
         }
 
@@ -95,6 +97,10 @@ export function initEmbeddedJsonUI(options) {
     });
 
     dom.cancelJsonSaveBtn?.addEventListener('click', () => {
+        if (!state.pendingEmbeddedJsonSave) {
+            return;
+        }
+
         state.pendingEmbeddedJsonSave = null;
         dom.jsonDiffModal.style.display = 'none';
         dom.embeddedJsonStatus.textContent = 'Save canceled.';
@@ -215,7 +221,11 @@ export function renderEmbeddedJsonEntry(entryIdRaw) {
         const treeNode = buildJsonTreeNode(currentEditableJson, null);
         dom.embeddedJsonTree.appendChild(treeNode);
     } catch (e) {
-        dom.embeddedJsonTree.innerHTML = `<div style=\"color: #ff6b6b;\">Invalid JSON: ${e.message}</div>`;
+        dom.embeddedJsonTree.innerHTML = '';
+        const errorNode = document.createElement('div');
+        errorNode.style.color = '#ff6b6b';
+        errorNode.textContent = `Invalid JSON: ${String(e?.message || e)}`;
+        dom.embeddedJsonTree.appendChild(errorNode);
         currentEditableJson = null;
     }
 }
@@ -403,10 +413,12 @@ export function getJsonFromTree() {
  * Updates the narrative text panel from extracted character fields.
  * @param {string|null} description
  * @param {string|null} firstMes
+ * @param {string|null} titleOverride - Optional title override (e.g., "Lyrics" for audio files)
  */
-export function updateCharacterTextPanel(description, firstMes) {
+export function updateCharacterTextPanel(description, firstMes, titleOverride = null) {
     const hasDescription = typeof description === 'string' && description.trim().length > 0;
     const hasFirstMes = typeof firstMes === 'string' && firstMes.trim().length > 0;
+    const isLyricsMode = titleOverride && titleOverride.toLowerCase() === 'lyrics';
 
     if (!hasDescription && !hasFirstMes) {
         dom.characterTextPanel.style.display = 'none';
@@ -416,6 +428,18 @@ export function updateCharacterTextPanel(description, firstMes) {
     }
 
     dom.characterTextPanel.style.display = 'flex';
+
+    if (titleOverride && dom.characterTextTitle) {
+        dom.characterTextTitle.textContent = titleOverride;
+    } else if (dom.characterTextTitle) {
+        dom.characterTextTitle.textContent = 'Character Text';
+    }
+
+    // Hide First Message block for lyrics mode
+    if (dom.characterFirstMessageBlock) {
+        dom.characterFirstMessageBlock.style.display = isLyricsMode ? 'none' : 'block';
+    }
+
     dom.characterDescription.textContent = hasDescription ? description.trim() : 'Not available';
     dom.characterFirstMes.textContent = hasFirstMes ? firstMes.trim() : 'Not available';
 }

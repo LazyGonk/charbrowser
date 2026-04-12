@@ -4,6 +4,7 @@ use std::path::Path;
 use std::str;
 use std::fs;
 
+/// Extracts baseline video metadata used by the frontend metadata panel.
 pub fn extract_video_metadata(
     path: &Path,
     file_name: String,
@@ -38,6 +39,7 @@ pub fn extract_video_metadata(
     })
 }
 
+/// Finds embedded JSON/plaintext payloads in raw video bytes for non-MP4 containers.
 pub fn find_video_embedded_json_matches(bytes: &[u8]) -> Result<Vec<VideoJsonMatch>, String> {
     let mut matches = Vec::new();
     let mut next_id = 0usize;
@@ -96,11 +98,13 @@ pub fn find_video_embedded_json_matches(bytes: &[u8]) -> Result<Vec<VideoJsonMat
     Ok(matches)
 }
 
+/// Finds embedded JSON payloads within MP4/MOV atoms.
 pub fn find_mp4_embedded_json_matches(bytes: &[u8]) -> Result<Vec<VideoJsonMatch>, String> {
     let (_atoms, matches) = find_mp4_embedded_json_matches_with_atoms(bytes)?;
     Ok(matches)
 }
 
+/// Updates one MP4/MOV embedded JSON payload while preserving atom size integrity.
 pub fn update_mp4_embedded_json(path: &Path, entry_id: usize, new_json_compact: &str) -> Result<(), String> {
     let mut bytes = fs::read(path).map_err(|e| format!("Failed to read MP4/MOV file: {}", e))?;
     let (atoms, matches) = find_mp4_embedded_json_matches_with_atoms(&bytes)?;
@@ -420,6 +424,7 @@ pub fn atom_type_label(atom_type: [u8; 4]) -> String {
     }
 }
 
+/// Returns bounded video file bytes encoded as a data URL for frontend preview.
 pub fn get_video_data_url(file_path: &str, max_bytes: usize) -> Result<String, String> {
     let path = Path::new(file_path);
     let ext = path

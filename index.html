@@ -6,13 +6,16 @@
     <title>CharBrowser</title>
     <link rel="stylesheet" href="/src/styles.css">
 </head>
-<body>
+<body spellcheck="false">
     <div id="app">
         <div class="toolbar">
-            <button id="openFolderBtn" class="btn">Open Folder</button>
-            <div class="drop-zone-hint">or drag & drop a file anywhere</div>
-            <div class="toolbar-tip">Tip: Use Arrow Up/Down to select files. Drag the separators to resize folder, preview, and metadata panes.</div>
-            <button id="showLicensesBtn" class="btn btn-secondary btn-small">Licenses</button>
+            <button id="openFolderBtn" class="btn">📁 Open Folder</button>
+            <button id="createCardBtn" class="btn btn-secondary">✨ Create New</button>
+            <button id="clearSelectionBtn" class="btn btn-secondary" style="display: none;">🗑️ Clear View</button>
+            <button id="assistantToggleBtn" class="btn btn-secondary">🤖 AI Assistant</button>
+            <div class="toolbar-tip">Tip: Use Arrow Up/Down to select files.</div>
+            <button id="openSettingsBtn" class="btn btn-secondary" title="Open settings">⚙️ Settings</button>
+            <button id="showLicensesBtn" class="btn btn-secondary">📜 Licenses</button>
         </div>
         
         <div class="main-container">
@@ -70,26 +73,33 @@
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        <h2>Drop a file here</h2>
-                        <p>or click "Open Folder" to browse files</p>
+                        <h2 id="dropZoneTitle">Drop a file or folder here</h2>
+                        <p id="dropZoneHint">or click here to open a folder</p>
                     </div>
                 </div>
                 
                 <div class="metadata-view" id="metadataView" style="display: none;">
                     <div class="preview-area">
                         <div class="preview-stage">
+                            <div id="previewFileInfoOverlay" class="preview-file-info-overlay" style="display: none;">
+                                <div class="preview-file-info-header">
+                                    <span id="previewFileInfoName" class="preview-file-info-name"></span>
+                                    <button id="previewFileInfoToggleBtn" class="btn btn-secondary btn-small preview-file-info-toggle" title="Show file info">ℹ️</button>
+                                </div>
+                                <div id="previewFileInfoDetails" class="preview-file-info-details"></div>
+                            </div>
                             <img id="preview" class="preview-image" style="display: none;" />
                             <video id="videoPreview" class="preview-video" style="display: none;" controls preload="metadata"></video>
                             <audio id="audioPreview" class="preview-audio" style="display: none;" controls preload="metadata"></audio>
                             <div id="noPreview" class="no-preview">No preview available</div>
                         </div>
                         <div id="characterTextPanel" class="character-text-panel" style="display: none;">
-                            <h3>Character Text</h3>
+                            <h3 id="characterTextTitle">Character Text</h3>
                             <div class="character-text-block">
                                 <h4>Description</h4>
                                 <div id="characterDescription" class="character-text-content"></div>
                             </div>
-                            <div class="character-text-block">
+                            <div id="characterFirstMessageBlock" class="character-text-block">
                                 <h4>First Message</h4>
                                 <div id="characterFirstMes" class="character-text-content"></div>
                             </div>
@@ -98,8 +108,174 @@
                     <div class="splitter splitter-horizontal" id="metadataSplitter" role="separator" aria-orientation="horizontal" aria-label="Resize metadata panel"></div>
                     
                     <div class="metadata-panel">
-                        <h2>File Information</h2>
-                        <button id="copyMetadataBtn" class="btn">Copy All Metadata</button>
+                        <div id="cardEditorSection" class="card-editor-section" style="display: none;">
+                            <div class="card-editor-header-row">
+                                <h2>Card Editor</h2>
+                                <span id="cardEditorModeBadge" class="card-editor-badge">Edit</span>
+                            </div>
+                            <div class="card-editor-grid">
+                                <div class="card-editor-field">
+                                    <label for="cardSchemaVersion">Schema</label>
+                                    <select id="cardSchemaVersion" class="embedded-json-select">
+                                        <option value="3.0">v3</option>
+                                        <option value="2.0">v2</option>
+                                        <option value="1.0">v1</option>
+                                    </select>
+                                </div>
+                                <div class="card-editor-field">
+                                    <label for="cardNameInput">Name</label>
+                                    <div class="card-editor-field-row">
+                                        <input id="cardNameInput" class="embedded-json-text-filter" type="text" placeholder="Character name" />
+                                        <button id="cardGenerateNameBtn" class="btn btn-secondary btn-small card-generate-btn" disabled title="Generate with AI (requires LLM settings)">🤖</button>
+                                        <button id="cardRegenerateNameBtn" class="btn btn-secondary btn-small card-regenerate-btn" title="Regenerate alternative" style="display:none;">↻</button>
+                                        <button id="cardRevertNameBtn" class="btn btn-secondary btn-small card-revert-btn" title="Revert generated value" style="display:none;">↩</button>
+                                    </div>
+                                </div>
+                                <div class="card-editor-field card-editor-field-full">
+                                    <label for="cardDescriptionInput">Description</label>
+                                    <div class="card-editor-field-row">
+                                        <textarea id="cardDescriptionInput" class="json-editor card-editor-textarea" placeholder="Character description"></textarea>
+                                        <button id="cardGenerateDescriptionBtn" class="btn btn-secondary btn-small card-generate-btn" disabled title="Generate with AI (requires LLM settings)">🤖</button>
+                                        <button id="cardRegenerateDescriptionBtn" class="btn btn-secondary btn-small card-regenerate-btn" title="Regenerate alternative" style="display:none;">↻</button>
+                                        <button id="cardRevertDescriptionBtn" class="btn btn-secondary btn-small card-revert-btn" title="Revert generated value" style="display:none;">↩</button>
+                                    </div>
+                                </div>
+                                <div class="card-editor-field card-editor-field-full">
+                                    <label for="cardFirstMesInput">First Message</label>
+                                    <div class="card-editor-field-row">
+                                        <textarea id="cardFirstMesInput" class="json-editor card-editor-textarea" placeholder="Opening message"></textarea>
+                                        <button id="cardGenerateFirstMesBtn" class="btn btn-secondary btn-small card-generate-btn" disabled title="Generate with AI (requires LLM settings)">🤖</button>
+                                        <button id="cardRegenerateFirstMesBtn" class="btn btn-secondary btn-small card-regenerate-btn" title="Regenerate alternative" style="display:none;">↻</button>
+                                        <button id="cardRevertFirstMesBtn" class="btn btn-secondary btn-small card-revert-btn" title="Revert generated value" style="display:none;">↩</button>
+                                    </div>
+                                </div>
+                                <div class="card-editor-field card-editor-field-full">
+                                    <label for="cardCreatorNotesInput">Creator Notes</label>
+                                    <div class="card-editor-field-row">
+                                        <textarea id="cardCreatorNotesInput" class="json-editor card-editor-textarea" placeholder="Notes for the card"></textarea>
+                                        <button id="cardGenerateNotesBtn" class="btn btn-secondary btn-small card-generate-btn" disabled title="Generate with AI (requires LLM settings)">🤖</button>
+                                        <button id="cardRegenerateNotesBtn" class="btn btn-secondary btn-small card-regenerate-btn" title="Regenerate alternative" style="display:none;">↻</button>
+                                        <button id="cardRevertNotesBtn" class="btn btn-secondary btn-small card-revert-btn" title="Revert generated value" style="display:none;">↩</button>
+                                    </div>
+                                </div>
+                                <div class="card-editor-field card-editor-field-full">
+                                    <label for="cardScenarioInput">Scenario</label>
+                                    <div class="card-editor-field-row">
+                                        <textarea id="cardScenarioInput" class="json-editor card-editor-textarea" placeholder="Scenario/context"></textarea>
+                                        <button id="cardGenerateScenarioBtn" class="btn btn-secondary btn-small card-generate-btn" disabled title="Generate with AI (requires LLM settings)">🤖</button>
+                                        <button id="cardRegenerateScenarioBtn" class="btn btn-secondary btn-small card-regenerate-btn" title="Regenerate alternative" style="display:none;">↻</button>
+                                        <button id="cardRevertScenarioBtn" class="btn btn-secondary btn-small card-revert-btn" title="Revert generated value" style="display:none;">↩</button>
+                                    </div>
+                                </div>
+                                <div class="card-editor-field card-editor-field-full">
+                                    <label for="cardTagsInput">Tags (comma-separated)</label>
+                                    <div class="card-editor-field-row">
+                                        <input id="cardTagsInput" class="embedded-json-text-filter" type="text" placeholder="fantasy, helper, teacher" />
+                                        <button id="cardGenerateTagsBtn" class="btn btn-secondary btn-small card-generate-btn" disabled title="Generate with AI (requires LLM settings)">🤖</button>
+                                        <button id="cardRegenerateTagsBtn" class="btn btn-secondary btn-small card-regenerate-btn" title="Regenerate alternative" style="display:none;">↻</button>
+                                        <button id="cardRevertTagsBtn" class="btn btn-secondary btn-small card-revert-btn" title="Revert generated value" style="display:none;">↩</button>
+                                    </div>
+                                </div>
+                                <div class="card-editor-field card-editor-field-full">
+                                    <label for="cardVisualDescriptionInput">Visual Description (ComfyUI)</label>
+                                    <div class="card-editor-field-row">
+                                        <textarea id="cardVisualDescriptionInput" class="json-editor card-editor-textarea" placeholder="Visual/physical details for image generation"></textarea>
+                                        <button id="cardGenerateVisualDescBtn" class="btn btn-secondary btn-small card-generate-btn" disabled title="Extract visual prompt from Description + First Message with AI">🤖</button>
+                                    </div>
+                                    <p class="card-editor-field-hint">Used for image generation only. This field is not saved to card JSON.</p>
+                                </div>
+                            </div>
+
+                            <details id="cardLorebookSection" class="card-editor-lorebook">
+                                <summary class="lorebook-summary">Character Books <span id="lorebookCount" class="lorebook-count">(0 entries)</span></summary>
+                                <div class="lorebook-content">
+                                    <p id="lorebookSchemaHint" class="card-editor-field-hint">Character Book entries are saved for schema v2/v3 cards.</p>
+                                    <div id="lorebookEntries" class="lorebook-entries-list"></div>
+                                    <div class="lorebook-actions">
+                                        <button id="lorebookAddEntryBtn" class="btn btn-secondary btn-small" type="button">+ Add Entry</button>
+                                        <button id="lorebookGenerateAllBtn" class="btn btn-secondary btn-small" disabled type="button">✨ Generate Character Books</button>
+                                        <button id="lorebookImportBtn" class="btn btn-secondary btn-small" type="button">📥 Import</button>
+                                        <button id="lorebookExportBtn" class="btn btn-secondary btn-small" type="button">📤 Export</button>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <div class="card-editor-advanced">
+                                <details id="cardEditorAdvancedDetails">
+                                    <summary>Advanced Fields (coming soon)</summary>
+                                    <div class="card-editor-advanced-content">
+                                        <div class="card-editor-field card-editor-field-full">
+                                            <label>Personality</label>
+                                            <input type="text" class="embedded-json-text-filter" placeholder="Personality traits..." disabled />
+                                        </div>
+                                        <div class="card-editor-llm-settings-placeholder">
+                                            <span>LLM settings required for AI generation</span>
+                                            <button id="cardOpenLlmSettingsBtn" class="btn btn-secondary btn-small" disabled>⚙️ LLM Settings</button>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+
+                            <div id="cardImageToolsPanel" class="card-image-tools" style="display: none;">
+                                <div class="card-image-tools-header">
+                                    <h3>Image Tools</h3>
+                                    <span id="cardImageToolsMeta" class="card-image-tools-meta">No image selected</span>
+                                </div>
+                                <div class="card-image-tools-grid">
+                                    <div class="card-editor-field">
+                                        <label>Portrait (2:3)</label>
+                                        <div class="card-image-tools-presets">
+                                            <button id="cardPreset1000x1500Btn" class="btn btn-secondary btn-small is-active" type="button" aria-pressed="true">🖼️ 1000×1500</button>
+                                            <button id="cardPreset800x1200Btn" class="btn btn-secondary btn-small" type="button" aria-pressed="false">🖼️ 800×1200</button>
+                                            <button id="cardPreset400x600Btn" class="btn btn-secondary btn-small" type="button" aria-pressed="false">🖼️ 400×600</button>
+                                        </div>
+                                    </div>
+                                    <div class="card-editor-field">
+                                        <label for="cardImageFitMode">Crop / Fit</label>
+                                        <select id="cardImageFitMode" class="embedded-json-select">
+                                            <option value="contain">Resize only</option>
+                                            <option value="cover">Center crop to fit</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="card-image-tools-actions">
+                                    <button id="cardApplyImageToolsBtn" class="btn btn-secondary btn-small" type="button">✅ Apply</button>
+                                    <button id="cardResetImageToolsBtn" class="btn btn-secondary btn-small" type="button">🔄 Reset Image</button>
+                                </div>
+                            </div>
+
+                            <div id="cardImageGenerationProgress" class="card-image-generation-progress" style="display: none;">
+                                <div class="progress-bar">
+                                    <div class="progress-bar-fill"></div>
+                                </div>
+                                <span id="cardImageGenerationStatus" class="progress-status">Initializing...</span>
+                            </div>
+
+                            <div id="cardCloseConfirm" class="card-close-confirm" style="display:none;">
+                                <span id="cardCloseConfirmMessage">Unsaved changes. Discard and continue?</span>
+                                <label id="cardCloseConfirmSkipWrap" class="card-close-confirm-skip" style="display:none;">
+                                    <input id="cardCloseConfirmSkipCheckbox" type="checkbox">
+                                    <span id="cardCloseConfirmSkipLabel">Do not ask again</span>
+                                </label>
+                                <button id="cardDiscardChangesBtn" class="btn btn-secondary btn-small">🗑️ Discard</button>
+                                <button id="cardKeepEditingBtn" class="btn btn-secondary btn-small">✍️ Keep Editing</button>
+                            </div>
+
+                            <div class="card-editor-actions">
+                                <button id="cardGenerateAllBtn" class="btn btn-secondary btn-small" disabled title="Generate all empty fields with AI">✨ Generate All</button>
+                                <button id="cardGenerateImageBtn" class="btn btn-secondary btn-small" disabled title="Generate image with ComfyUI (requires ComfyUI settings)">🎨 Generate Image</button>
+                                <button id="cardImportJsonBtn" class="btn btn-secondary btn-small">📋 Import JSON</button>
+                                <button id="cardExportJsonBtn" class="btn btn-secondary btn-small">🧾 Export JSON</button>
+                                <button id="cardSaveBtn" class="btn btn-small">💾 Save Card</button>
+                                <button id="cardCancelCreateBtn" class="btn btn-secondary btn-small">❌ Cancel Create</button>
+                                <span id="cardEditorStatus" class="embedded-json-status"></span>
+                            </div>
+                        </div>
+
+                        <div id="metadataHeaderContainer" class="metadata-header-container">
+                            <h2 id="fileInfoHeader">File Information</h2>
+                            <button id="copyMetadataBtn" class="btn btn-secondary">📋 Copy All Metadata</button>
+                        </div>
                         <div id="metadataContent" class="metadata-content"></div>
                         <div id="embeddedJsonSection" class="embedded-json-section" style="display: none;">
                             <h3>Embedded JSON</h3>
@@ -127,7 +303,7 @@
                             <div id="embeddedJsonTree" class="json-tree"></div>
 
                             <div class="embedded-json-actions">
-                                <button id="saveEmbeddedJsonBtn" class="btn">Save Embedded JSON</button>
+                                <button id="saveEmbeddedJsonBtn" class="btn">💾 Save Embedded JSON</button>
                                 <div id="embeddedJsonStatus" class="embedded-json-status"></div>
                             </div>
                         </div>
@@ -146,25 +322,213 @@
                 </div>
             </div>
         </div>
+
+        <section id="assistantPanel" class="assistant-panel" style="display: none;" aria-label="AI Assistant" role="dialog" aria-modal="false">
+            <div class="assistant-panel-header">
+                <div class="assistant-panel-title">🤖 AI Assistant</div>
+                <div class="assistant-panel-meta">
+                    <span id="assistantModelInfo" class="assistant-model-info">Model: not configured</span>
+                    <span id="assistantConnectionStatus" class="assistant-connection-status">Disconnected</span>
+                </div>
+                <div class="assistant-panel-actions">
+                    <button id="assistantClearBtn" class="btn btn-secondary btn-small" type="button">Clear</button>
+                    <button id="assistantCloseBtn" class="btn btn-secondary btn-small" type="button" title="Close">✕</button>
+                </div>
+            </div>
+            <div id="assistantMessages" class="assistant-messages" aria-live="polite"></div>
+            <div class="assistant-input-row">
+                <textarea id="assistantInput" class="json-editor assistant-input" rows="2" placeholder="Type a message... (Ctrl+Shift+A to toggle)"></textarea>
+                <button id="assistantSendBtn" class="btn" type="button">Send</button>
+            </div>
+        </section>
     </div>
 
     <div id="jsonDiffModal" class="json-diff-modal" style="display: none;">
         <div class="json-diff-dialog">
-            <h3>Review JSON Changes</h3>
+            <h3 id="jsonDiffTitle">Review Changes</h3>
             <div id="jsonDiffSummary" class="json-diff-summary"></div>
             <div class="json-diff-grid">
                 <div class="json-diff-col">
-                    <h4>Original</h4>
+                    <h4 id="jsonDiffOriginalLabel">Original</h4>
                     <pre id="jsonDiffOriginal" class="json-diff-pre"></pre>
                 </div>
                 <div class="json-diff-col">
-                    <h4>Edited</h4>
+                    <h4 id="jsonDiffEditedLabel">Edited</h4>
                     <pre id="jsonDiffEdited" class="json-diff-pre"></pre>
                 </div>
             </div>
             <div class="json-diff-actions">
-                <button id="confirmJsonSaveBtn" class="btn">Confirm Save</button>
-                <button id="cancelJsonSaveBtn" class="btn btn-secondary">Cancel</button>
+                <button id="confirmJsonSaveBtn" class="btn">✅ Confirm Save</button>
+                <button id="cancelJsonSaveBtn" class="btn btn-secondary">❌ Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settingsModal" class="json-diff-modal" style="display: none;">
+        <div class="json-diff-dialog settings-dialog">
+            <h3>Settings</h3>
+            <div class="settings-layout">
+                <div class="settings-tablist" role="tablist" aria-label="Settings sections">
+                    <button id="settingsTabGeneral" class="btn btn-secondary settings-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="settingsPanelGeneral">⚙️ General</button>
+                    <button id="settingsTabLlm" class="btn btn-secondary settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelLlm">🤖 LLM</button>
+                    <button id="settingsTabComfy" class="btn btn-secondary settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelComfy">🖼️ ComfyUI</button>
+                    <button id="settingsTabAbout" class="btn btn-secondary settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelAbout">ℹ️ About</button>
+                </div>
+                <div class="settings-panels">
+                    <section id="settingsPanelGeneral" class="settings-panel is-active" role="tabpanel">
+                        <div class="settings-group">
+                            <h4>General</h4>
+                            <label><input type="checkbox" id="settingsDarkMode" checked /> Dark mode</label>
+                            <label><input type="checkbox" id="settingsShowHiddenFiles" /> Show hidden files</label>
+                            <label><input type="checkbox" id="settingsAutoLoadMetadata" checked /> Auto-load file metadata</label>
+                            <label><input type="checkbox" id="settingsShowThumbnails" checked /> Show thumbnails in file list</label>
+                            <label><input type="checkbox" id="settingsAutoSaveCards" /> Auto-save cards when editing</label>
+                            <label>Auto-backup interval (seconds): <input type="number" id="settingsBackupInterval" value="60" min="10" max="3600" disabled /></label>
+                            <label for="settingsDefaultCardFormat">Default card format</label>
+                            <select id="settingsDefaultCardFormat" class="embedded-json-select">
+                                <option value="2.0">v2</option>
+                                <option value="3.0">v3</option>
+                                <option value="1.0">v1</option>
+                            </select>
+                            <label for="settingsPreviewQuality">Image preview quality</label>
+                            <select id="settingsPreviewQuality" class="embedded-json-select">
+                                <option value="balanced">Balanced</option>
+                                <option value="high">High quality</option>
+                                <option value="fast">Fast loading</option>
+                            </select>
+                        </div>
+                    </section>
+                    <section id="settingsPanelLlm" class="settings-panel" role="tabpanel" hidden>
+                        <div class="settings-group">
+                            <h4>LLM Settings</h4>
+                            <label for="settingsLlmApiType">API Type</label>
+                            <select id="settingsLlmApiType" class="embedded-json-select">
+                                <option value="openai">OpenAI compatible</option>
+                                <option value="ollama">Ollama</option>
+                            </select>
+                            <label for="settingsLlmApiEndpoint">Provider Endpoint</label>
+                            <select id="settingsLlmApiEndpoint" class="embedded-json-select">
+                                <option value="custom">Custom</option>
+                            </select>
+                            <label for="settingsLlmEndpoint">Endpoint</label>
+                            <input id="settingsLlmEndpoint" class="embedded-json-text-filter" type="text" placeholder="http://localhost:1234/v1 (OpenAI compatible)" />
+                            <label for="settingsLlmApiKey">API Key</label>
+                            <input id="settingsLlmApiKey" class="embedded-json-text-filter" type="password" placeholder="sk-..." />
+                            <div id="settingsAppDataPath" class="embedded-json-status"></div>
+                            <label for="settingsLlmModel">Model</label>
+                            <input id="settingsLlmModel" class="embedded-json-text-filter" type="text" placeholder="gpt-4.1-mini / llama3.1" />
+                            <div class="settings-inline-actions">
+                                <input id="settingsLlmModelSelect" class="embedded-json-text-filter" type="text" list="settingsLlmModelList" placeholder="Type to filter or select..." />
+                                <datalist id="settingsLlmModelList"></datalist>
+                                <button id="settingsFetchModelsBtn" class="btn btn-secondary btn-small" type="button">🔄 Refresh Models</button>
+                            </div>
+                            <div id="settingsLlmModelsStatus" class="embedded-json-status"></div>
+                            <label for="settingsLlmTemperature">Temperature</label>
+                            <input id="settingsLlmTemperature" class="embedded-json-text-filter" type="number" min="0" max="2" step="0.1" value="0.7" />
+                            <label for="settingsLlmMaxTokens">Max Tokens</label>
+                            <input id="settingsLlmMaxTokens" class="embedded-json-text-filter" type="number" min="64" max="8192" step="64" value="1024" />
+                            <label for="settingsLlmSystemPrompt">System Prompt</label>
+                            <textarea id="settingsLlmSystemPrompt" class="json-editor card-editor-textarea" placeholder="Generate concise, character-card-ready prose."></textarea>
+                            <h4>Prompt Templates</h4>
+                            <details>
+                                <summary>Name Template</summary>
+                                <textarea id="settingsPromptTemplateName" class="json-editor card-editor-textarea"></textarea>
+                            </details>
+                            <details>
+                                <summary>Description Template</summary>
+                                <textarea id="settingsPromptTemplateDescription" class="json-editor card-editor-textarea"></textarea>
+                            </details>
+                            <details>
+                                <summary>First Message Template</summary>
+                                <textarea id="settingsPromptTemplateFirstMes" class="json-editor card-editor-textarea"></textarea>
+                            </details>
+                            <details>
+                                <summary>Creator Notes Template</summary>
+                                <textarea id="settingsPromptTemplateCreatorNotes" class="json-editor card-editor-textarea"></textarea>
+                            </details>
+                            <details>
+                                <summary>Scenario Template</summary>
+                                <textarea id="settingsPromptTemplateScenario" class="json-editor card-editor-textarea"></textarea>
+                            </details>
+                            <details>
+                                <summary>Tags Template</summary>
+                                <textarea id="settingsPromptTemplateTags" class="json-editor card-editor-textarea"></textarea>
+                            </details>
+                            <details>
+                                <summary>Visual Description Template</summary>
+                                <textarea id="settingsPromptTemplateVisualDesc" class="json-editor card-editor-textarea"></textarea>
+                            </details>
+                            <details>
+                                <summary>Generate All Template</summary>
+                                <textarea id="settingsPromptTemplateGenerateAll" class="json-editor card-editor-textarea"></textarea>
+                            </details>
+                            <details>
+                                <summary>Character Book Generate Template</summary>
+                                <textarea id="settingsPromptTemplateLorebookGenerate" class="json-editor card-editor-textarea"></textarea>
+                            </details>
+                            <details>
+                                <summary>Character Book Refine Template</summary>
+                                <textarea id="settingsPromptTemplateLorebookRefine" class="json-editor card-editor-textarea"></textarea>
+                            </details>
+                            <button id="settingsResetTemplatesBtn" class="btn btn-secondary btn-small" type="button">↩️ Reset Prompt Templates</button>
+                        </div>
+                    </section>
+                    <section id="settingsPanelComfy" class="settings-panel" role="tabpanel" hidden>
+                        <div class="settings-group">
+                            <h4>ComfyUI Settings</h4>
+                            <label for="settingsComfyApiType">ComfyUI API Type</label>
+                            <select id="settingsComfyApiType" class="embedded-json-select">
+                                <option value="local">Local ComfyUI</option>
+                                <option value="runpod">RunPod Serverless</option>
+                            </select>
+                            <div id="settingsComfyLocalFields">
+                                <label for="settingsComfyEndpoint">Endpoint</label>
+                                <input id="settingsComfyEndpoint" class="embedded-json-text-filter" type="text" placeholder="http://127.0.0.1:8188" />
+                            </div>
+                            <div id="settingsComfyRunpodFields" style="display: none;">
+                                <label for="settingsComfyApiKey">RunPod API Key</label>
+                                <input id="settingsComfyApiKey" class="embedded-json-text-filter" type="password" placeholder="rp_..." />
+                                <label for="settingsComfyEndpointId">RunPod Endpoint ID</label>
+                                <input id="settingsComfyEndpointId" class="embedded-json-text-filter" type="text" placeholder="abc123def456" />
+                            </div>
+                            <p class="settings-status-text">RunPod base URL is fixed to https://api.runpod.ai/v2/{endpointId}.</p>
+                            <div class="settings-inline-actions">
+                                <button id="settingsTestComfyConnectionBtn" class="btn btn-secondary btn-small">🔌 Test Connection</button>
+                                <span id="settingsComfyConnectionStatus" class="settings-status-text"></span>
+                            </div>
+                            <label for="settingsComfyWorkflow">Workflow JSON</label>
+                            <textarea id="settingsComfyWorkflow" class="json-editor card-editor-textarea" placeholder="Paste workflow JSON here"></textarea>
+                            <div class="settings-inline-actions">
+                                <button id="settingsComfyValidateWorkflowBtn" class="btn btn-secondary btn-small">✅ Validate Workflow</button>
+                                <span id="settingsComfyWorkflowStatus" class="settings-status-text"></span>
+                            </div>
+                            <label for="settingsComfyPositivePrompt">Positive Prompt Template (use <code>{{description}}</code> for visual prompt text)</label>
+                            <textarea id="settingsComfyPositivePrompt" class="json-editor card-editor-textarea" placeholder="{{description}}, highly detailed, character portrait, best quality"></textarea>
+                            <label for="settingsComfyNegativePrompt">Negative Prompt</label>
+                            <textarea id="settingsComfyNegativePrompt" class="json-editor card-editor-textarea" placeholder="blurry, malformed hands, bad anatomy"></textarea>
+                        </div>
+                    </section>
+                    <section id="settingsPanelAbout" class="settings-panel" role="tabpanel" hidden>
+                        <div class="settings-group">
+                            <h4>About</h4>
+                            <div class="settings-about-item"><span>App:</span> <strong>CharBrowser</strong></div>
+                            <div class="settings-about-item"><span>Version:</span> <strong>0.2.0</strong></div>
+                            <div class="settings-about-item"><span>Build:</span> <strong>Desktop / Tauri</strong></div>
+                            <div class="settings-about-item"><span>Copyright:</span> <strong>© 2026 LazyGonk</strong></div>
+                            <div class="settings-about-item"><span>License:</span> <strong>MIT</strong></div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+            <div class="json-diff-actions">
+                <div id="settingsCloseConfirm" class="settings-close-confirm" style="display:none;">
+                    <span>Unsaved changes. What would you like to do?</span>
+                    <button id="settingsSaveAndCloseBtn" class="btn btn-small">💾 Save &amp; Close</button>
+                    <button id="settingsDiscardBtn" class="btn btn-secondary btn-small">🗑️ Discard</button>
+                    <button id="settingsCancelCloseBtn" class="btn btn-secondary btn-small">✍️ Keep Editing</button>
+                </div>
+                <button id="saveSettingsBtn" class="btn btn-secondary">💾 Save</button>
+                <button id="closeSettingsBtn" class="btn btn-secondary btn-small">✕ Close</button>
             </div>
         </div>
     </div>
@@ -197,8 +561,8 @@
                 </table>
             </div>
             <div class="json-diff-actions">
-                <a id="openNoticesFileLink" href="/THIRD_PARTY_NOTICES.md" target="_blank" rel="noreferrer" class="btn btn-secondary">Open Notices</a>
-                <button id="closeLicensesBtn" class="btn">Close</button>
+                <a id="openNoticesFileLink" href="/THIRD_PARTY_NOTICES.md" target="_blank" rel="noreferrer" class="btn btn-secondary">📄 Open Notices</a>
+                <button id="closeLicensesBtn" class="btn">✕ Close</button>
             </div>
         </div>
     </div>
@@ -208,9 +572,24 @@
             <h3 id="docViewerTitle">Document</h3>
             <pre id="docViewerContent" class="json-diff-pre doc-viewer-pre"></pre>
             <div class="json-diff-actions">
-                <button id="closeDocViewerBtn" class="btn">Close</button>
+                <button id="closeDocViewerBtn" class="btn">✕ Close</button>
             </div>
         </div>
+    </div>
+
+    <div id="surpriseOverlay" class="surprise-overlay" aria-hidden="true" role="presentation">
+        <div class="surprise-scanlines" aria-hidden="true"></div>
+        <div class="surprise-content" aria-live="polite">
+            <div class="surprise-alert-symbol">!</div>
+            <div class="surprise-alert-text" data-text="ALERT">ALERT</div>
+            <div class="surprise-alert-subtext" data-text="INTRUDER DETECTED">INTRUDER DETECTED</div>
+            <div class="surprise-alert-hint">Press ESC or click to dismiss</div>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay" aria-hidden="true" role="status" aria-live="polite">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <div id="loadingOverlayText" class="loading-text">Loading folder...</div>
     </div>
     
     <script type="module" src="/src/main.js"></script>

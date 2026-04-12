@@ -1,12 +1,17 @@
 import { CACHE_MAX_SIZE } from './constants.js';
 
+/**
+ * Shared mutable app state used across UI and service modules.
+ */
 export const state = {
+    currentDirectory: null,
     currentFiles: [],
     allFolderFiles: [],
     selectedFile: null,
     embeddedJsonEntries: [],
     filteredEmbeddedJsonEntries: [],
     pendingEmbeddedJsonSave: null,
+    pendingMetadataSave: null,
     textEntries: [],
     embeddedJsonFieldDescriptors: [],
     embeddedJsonFieldSyncTimer: null,
@@ -21,8 +26,15 @@ export const state = {
     licenseInventory: [],
     licensesLoaded: false,
     licensesGeneratedAt: 'unknown',
+    cardEditorMode: 'view',
+    preserveEmptySelection: false,
 };
 
+/**
+ * Trims oldest cache entries when map exceeds configured size.
+ * @template K, V
+ * @param {Map<K, V>} cache
+ */
 export function evictCacheIfNeeded(cache) {
     if (cache.size > CACHE_MAX_SIZE) {
         const keys = Array.from(cache.keys());

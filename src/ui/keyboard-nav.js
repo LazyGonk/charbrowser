@@ -1,5 +1,6 @@
 import { dom } from '../dom.js';
 import { state } from '../state.js';
+import { confirmCardEditorExit } from './card-editor.js';
 
 /**
  * Checks if focused element is an editable context where arrow keys should not navigate files.
@@ -29,7 +30,7 @@ export function isTextEditingContext() {
  * @param {(filePath: string) => void} selectFileInList
  * @param {(filePath: string) => Promise<void>} onFileSelected
  */
-export function selectFileByOffset(offset, selectFileInList, onFileSelected) {
+export async function selectFileByOffset(offset, selectFileInList, onFileSelected) {
     if (!Array.isArray(state.currentFiles) || state.currentFiles.length === 0) {
         return;
     }
@@ -45,17 +46,20 @@ export function selectFileByOffset(offset, selectFileInList, onFileSelected) {
         return;
     }
 
+    // Delegate to onFileSelected (loadFileMetadata) which handles unsaved check and loading
+    // Then update highlight after successful load
+    await onFileSelected(nextFile);
     selectFileInList(nextFile);
     dom.fileList.focus();
-    onFileSelected(nextFile);
 }
 
 /**
  * Initializes global arrow-key file navigation.
  * @param {(filePath: string) => void} selectFileInList
  * @param {(filePath: string) => Promise<void>} onFileSelected
+ * @param {() => Promise<void>} onDeleteSelected - Callback for delete key / backspace
  */
-export function initKeyboardNavigation(selectFileInList, onFileSelected) {
+export function initKeyboardNavigation(selectFileInList, onFileSelected, onDeleteSelected) {
     document.addEventListener('keydown', (event) => {
         if (dom.jsonDiffModal?.style.display === 'flex') {
             return;
@@ -71,6 +75,11 @@ export function initKeyboardNavigation(selectFileInList, onFileSelected) {
         } else if (event.key === 'ArrowUp') {
             event.preventDefault();
             selectFileByOffset(-1, selectFileInList, onFileSelected);
+        } else if (event.key === 'Delete' || event.key === 'Backspace') {
+            event.preventDefault();
+            if (typeof onDeleteSelected === 'function') {
+                onDeleteSelected();
+            }
         }
     });
 }

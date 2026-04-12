@@ -1,0 +1,563 @@
+/* Card editor form, lorebook section, and image tool controls. */
+.card-editor-section {
+    margin-bottom: 18px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(0, 122, 204, 0.08), rgba(0, 122, 204, 0.02));
+}
+
+.card-editor-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.card-editor-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(107, 182, 255, 0.5);
+    color: #9dd2ff;
+    background: rgba(0, 0, 0, 0.2);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.card-editor-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.card-editor-field {
+    display: grid;
+    gap: 6px;
+}
+
+.card-editor-field label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.card-editor-field-hint {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.card-editor-field-full {
+    grid-column: 1 / -1;
+}
+
+.card-editor-textarea {
+    min-height: 84px;
+    max-height: 180px;
+    resize: vertical;
+}
+
+.card-editor-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.card-editor-lorebook {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.card-editor-lorebook.is-disabled {
+    opacity: 0.65;
+}
+
+.lorebook-summary {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    list-style: none;
+}
+
+.lorebook-summary::-webkit-details-marker {
+    display: none;
+}
+
+.lorebook-summary::before {
+    content: '▸';
+    margin-right: 6px;
+    color: var(--text-secondary);
+}
+
+.card-editor-lorebook[open] .lorebook-summary::before {
+    content: '▾';
+}
+
+.lorebook-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.lorebook-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.lorebook-count {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.lorebook-entries-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 600px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.lorebook-entry {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.lorebook-entry-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    justify-content: space-between;
+}
+
+.lorebook-entry-id-badge {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    padding: 4px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.lorebook-entry-summary-line {
+    flex: 1;
+    font-size: 12px;
+    color: var(--text-secondary);
+    word-break: break-word;
+    line-height: 1.4;
+    min-width: 0;
+}
+
+.lorebook-entry-delete {
+    flex-shrink: 0;
+}
+
+.lorebook-entry-details {
+    border-top: 1px solid var(--border);
+}
+
+.lorebook-entry-details summary {
+    cursor: pointer;
+    font-size: 11px;
+    padding: 8px 10px;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.lorebook-entry-details summary:hover {
+    background: var(--bg-tertiary);
+}
+
+.lorebook-entry-details[open] summary {
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+}
+
+.lorebook-entry-editor {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg-primary);
+}
+
+.lorebook-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.lorebook-field label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+}
+
+.lorebook-field input,
+.lorebook-field textarea {
+    font-size: 12px;
+}
+
+.lorebook-field textarea {
+    min-height: 80px;
+    resize: vertical;
+    max-height: 200px;
+}
+
+.lorebook-entry-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.meta-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    background: var(--bg-secondary);
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+.meta-field label {
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+}
+
+.meta-field input,
+.meta-field textarea {
+    font-size: 11px;
+    padding: 4px;
+}
+
+.meta-field textarea {
+    min-height: 60px;
+    max-height: 120px;
+    resize: vertical;
+}
+
+.meta-field-bool {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 4px 6px;
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+.meta-field-bool input {
+    cursor: pointer;
+}
+
+.lorebook-no-advanced {
+    padding: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+.lorebook-entry-extensions-wrap {
+    margin-top: 6px;
+    padding: 6px;
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+.lorebook-entry-extensions-wrap summary {
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+}
+
+.lorebook-entry-meta-object {
+    font-size: 11px;
+    min-height: 60px;
+    max-height: 140px;
+    resize: vertical;
+}
+
+.lorebook-entry-actions,
+.lorebook-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.lorebook-empty {
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+}
+
+@media (max-width: 900px) {
+    .lorebook-entry-advanced-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Inline unsaved-changes confirm bar shown in the card editor (create mode). */
+.card-close-confirm {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    margin: 8px 0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.card-close-confirm-skip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.card-close-confirm-skip input {
+    margin: 0;
+}
+
+@keyframes confirm-flash-once {
+    0% { box-shadow: 0 0 0 0 rgba(107, 182, 255, 0.55); }
+    45% { box-shadow: 0 0 0 4px rgba(107, 182, 255, 0.35); }
+    100% { box-shadow: 0 0 0 0 rgba(107, 182, 255, 0); }
+}
+
+.card-close-confirm.confirm-flash,
+.settings-close-confirm.confirm-flash {
+    animation: confirm-flash-once 0.75s ease-out 1;
+}
+.card-editor-field-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.card-editor-grid > .card-editor-field:not(.card-editor-field-full) .card-editor-field-row {
+    align-items: center;
+}
+
+.card-editor-field-row textarea {
+    flex: 1;
+}
+
+.card-editor-field-row input {
+    flex: 1;
+}
+
+.card-generate-btn {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    font-size: 11px;
+    height: 30px;
+    margin-top: 24px;
+}
+
+.card-generate-btn.loading {
+    opacity: 0.75;
+    cursor: wait;
+}
+
+.card-regenerate-btn,
+.card-revert-btn {
+    display: none;
+    flex-shrink: 0;
+    padding: 4px 8px;
+    font-size: 11px;
+    height: 30px;
+    margin-top: 24px;
+}
+
+.card-editor-grid > .card-editor-field:not(.card-editor-field-full) .card-regenerate-btn,
+.card-editor-grid > .card-editor-field:not(.card-editor-field-full) .card-revert-btn {
+    margin-top: 0;
+}
+
+.card-editor-grid > .card-editor-field:not(.card-editor-field-full) .card-generate-btn {
+    margin-top: 0;
+}
+
+#cardGenerateTagsBtn {
+    margin-top: 0;
+    align-self: center;
+}
+
+#cardRegenerateTagsBtn,
+#cardRevertTagsBtn {
+    margin-top: 0;
+    align-self: center;
+}
+
+/* ComfyUI image generation progress indicator */
+.card-image-generation-progress {
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.progress-bar {
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    width: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    animation: progress-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.progress-status {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.card-editor-advanced {
+    margin-top: 16px;
+}
+
+.card-image-tools {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-elevated);
+}
+
+.card-image-tools-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.card-image-tools-header h3 {
+    font-size: 14px;
+}
+
+.card-image-tools-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.card-image-tools-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.card-image-tools-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.card-image-tools-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.card-image-tools-presets .btn.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--btn-primary-text, #ffffff);
+}
+
+.card-image-tools-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+#cardEditorAdvancedDetails {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    padding: 8px 12px;
+}
+
+#cardEditorAdvancedDetails summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+#cardEditorAdvancedDetails[open] summary {
+    margin-bottom: 12px;
+}
+
+.card-editor-advanced-content {
+    display: grid;
+    gap: 12px;
+}
+
+.card-editor-llm-settings-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+#copyMetadataBtn {
+    flex-shrink: 0;
+}
+

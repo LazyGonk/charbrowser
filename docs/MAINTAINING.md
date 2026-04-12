@@ -53,7 +53,7 @@ node scripts/generate-licenses.mjs
 - GitHub Actions builds release artifacts for **Windows**, **macOS**, and **Linux**.
 - Windows release publishes a **portable `charbrowser.exe` only** (no installer bundle).
 - Trigger options:
-  - Push a version tag such as `v0.1.0`
+  - Push a version tag such as `v0.2.0`
   - Run the `Release` workflow manually from GitHub Actions
 - Workflow file: `.github/workflows/release.yml`
 - Releases are created as **drafts** for review before publishing.
@@ -82,7 +82,4 @@ git push origin --tags
 
 ## Open Issues
 
-| Issue | Priority | Status |
-|-------|----------|--------|
-| `unwrap_or("Unknown")` silently hides failures | P2 | Open |
-| Duration not extracted for M4A/FLAC | P2 | Open |
+No release-blocking maintenance issues are currently tracked in this document.
