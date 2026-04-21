@@ -2,6 +2,8 @@ import {
     AUDIO_COVER_MAX_SIZE,
     AUDIO_EXTS,
     IMAGE_EXTS,
+    JSON_EXTS,
+    JSON_PREVIEW_MAX_LENGTH,
     PREVIEW_IMAGE_MAX_SIZE,
     PREVIEW_MEDIA_MAX_BYTES,
     VIDEO_READY_TIMEOUT_MS,
@@ -9,8 +11,9 @@ import {
 } from '../constants.js';
 import { dom } from '../dom.js';
 import { state } from '../state.js';
-import { getAudioCover, getAudioDataUrl, getImageDataUrl, getThumbnail, getVideoDataUrl } from '../services/tauri-api.js';
+import { getAudioCover, getAudioDataUrl, getImageDataUrl, getThumbnail, getVideoDataUrl, readTextFile } from '../services/tauri-api.js';
 import { getFileName, formatDuration } from '../utils/file-utils.js';
+import { formatJsonPreviewText } from '../utils/json-utils.js';
 import { escapeHtml } from '../utils/string-utils.js';
 import { setFileInfoVisibility } from './metadata-panel.js';
 
@@ -136,6 +139,7 @@ export function resetPreviewStage(message = 'No preview available') {
     dom.audioPreview.removeAttribute('src');
     dom.previewStage?.classList.remove('audio-cover-layout');
     dom.previewStage?.classList.remove('audio-no-cover-layout');
+    dom.noPreview.classList.remove('json-preview-message');
     dom.noPreview.textContent = message;
     dom.noPreview.style.display = 'block';
     clearPreviewFileInfo();
@@ -163,6 +167,19 @@ export function showPreviewImageDataUrl(imageDataUrl) {
     dom.noPreview.style.display = 'none';
     dom.preview.src = imageDataUrl;
     dom.preview.style.display = 'block';
+}
+
+/**
+ * Shows JSON text in preview stage with optional pretty formatting.
+ * @param {string} jsonText
+ */
+function showJsonPreview(jsonText) {
+    const { formattedText } = formatJsonPreviewText(jsonText, JSON_PREVIEW_MAX_LENGTH);
+    const escaped = escapeHtml(formattedText);
+
+    dom.noPreview.classList.add('json-preview-message');
+    dom.noPreview.innerHTML = `<pre class="json-preview-content">${escaped}</pre>`;
+    dom.noPreview.style.display = 'block';
 }
 
 /**
@@ -314,5 +331,24 @@ export async function updatePreview(filePath, ext, requestToken) {
         return;
     }
 
+    if (JSON_EXTS.has(ext)) {
+        try {
+            const jsonText = await readTextFile(filePath);
+            if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
+                return;
+            }
+            showJsonPreview(jsonText);
+        } catch (error) {
+            if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
+                return;
+            }
+            dom.noPreview.classList.remove('json-preview-message');
+            dom.noPreview.textContent = `JSON preview unavailable: ${String(error)}`;
+            dom.noPreview.style.display = 'block';
+        }
+        return;
+    }
+
+    dom.noPreview.classList.remove('json-preview-message');
     dom.noPreview.style.display = 'block';
 }

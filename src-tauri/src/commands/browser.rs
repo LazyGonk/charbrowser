@@ -45,6 +45,7 @@ pub fn list_directory_files(dir_path: String) -> Result<Vec<String>, String> {
                             | "flac"
                             | "ogg"
                             | "m4a"
+                            | "json"
                     ) {
                         if let Some(path_str) = path.to_str() {
                             files.push(path_str.to_string());

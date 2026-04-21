@@ -137,7 +137,7 @@ export function renderFileList(files, onFileSelected) {
  * Call this when card editor mode changes.
  */
 export function updateNewCardEntryVisibility() {
-    const isCreateMode = state.cardEditorMode === 'create';
+    const isCreateMode = state.cardEditorMode === 'create' && !state.selectedFile;
     setNewCardEntryMode(isCreateMode);
 }
 
@@ -312,7 +312,7 @@ export async function applyFolderFilters(onFileSelected, options = {}) {
     const nextFile = filtered.includes(previousSelected) ? previousSelected : filtered[0];
     selectFileInList(nextFile);
     if (nextFile !== previousSelected) {
-        await onFileSelected(nextFile);
+        await onFileSelected(nextFile, { autoSelected: true });
     }
 }
 

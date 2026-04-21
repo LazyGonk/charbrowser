@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-12",
+  "generatedAt": "2026-04-21",
   "total": 704,
   "npmCount": 109,
   "cargoCount": 595,
@@ -95,7 +95,7 @@
     {
       "ecosystem": "npm",
       "name": "@napi-rs/wasm-runtime",
-      "version": "1.1.3",
+      "version": "1.1.4",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -103,7 +103,7 @@
     {
       "ecosystem": "npm",
       "name": "@oxc-project/types",
-      "version": "0.124.0",
+      "version": "0.126.0",
       "license": "MIT",
       "homepage": "https://oxc.rs",
       "author": "Boshen and oxc contributors"
@@ -111,7 +111,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-android-arm64",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -119,7 +119,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-darwin-arm64",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -127,7 +127,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-darwin-x64",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -135,7 +135,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-freebsd-x64",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -143,7 +143,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-linux-arm-gnueabihf",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -151,7 +151,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-linux-arm64-gnu",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -159,7 +159,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-linux-arm64-musl",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -167,7 +167,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-linux-ppc64-gnu",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -175,7 +175,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-linux-s390x-gnu",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -183,7 +183,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-linux-x64-gnu",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -191,7 +191,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-linux-x64-musl",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -199,7 +199,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-openharmony-arm64",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -207,7 +207,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-wasm32-wasi",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -215,7 +215,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-win32-arm64-msvc",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -223,7 +223,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/binding-win32-x64-msvc",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "https://rolldown.rs/",
       "author": ""
@@ -231,7 +231,7 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/pluginutils",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "https://rolldown.rs/",
       "author": ""
@@ -351,7 +351,7 @@
     {
       "ecosystem": "npm",
       "name": "@tauri-apps/plugin-dialog",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "license": "MIT OR Apache-2.0",
       "homepage": "",
       "author": ""
@@ -359,7 +359,7 @@
     {
       "ecosystem": "npm",
       "name": "@tauri-apps/plugin-fs",
-      "version": "2.4.5",
+      "version": "2.5.0",
       "license": "MIT OR Apache-2.0",
       "homepage": "",
       "author": ""
@@ -751,15 +751,15 @@
     {
       "ecosystem": "npm",
       "name": "postcss",
-      "version": "8.5.8",
+      "version": "8.5.10",
       "license": "MIT",
       "homepage": "https://postcss.org/",
-      "author": "Andrey Sitnik <andrey@sitnik.ru>"
+      "author": "Andrey Sitnik <andrey@sitnik.es>"
     },
     {
       "ecosystem": "npm",
       "name": "rolldown",
-      "version": "1.0.0-rc.15",
+      "version": "1.0.0-rc.16",
       "license": "MIT",
       "homepage": "https://rolldown.rs/",
       "author": ""
@@ -799,7 +799,7 @@
     {
       "ecosystem": "npm",
       "name": "std-env",
-      "version": "4.0.0",
+      "version": "4.1.0",
       "license": "MIT",
       "homepage": "",
       "author": ""
@@ -831,7 +831,7 @@
     {
       "ecosystem": "npm",
       "name": "tinyglobby",
-      "version": "0.2.15",
+      "version": "0.2.16",
       "license": "MIT",
       "homepage": "https://superchupu.dev/tinyglobby",
       "author": "Superchupu"
@@ -855,7 +855,7 @@
     {
       "ecosystem": "npm",
       "name": "vite",
-      "version": "8.0.8",
+      "version": "8.0.9",
       "license": "MIT",
       "homepage": "https://vite.dev",
       "author": "Evan You"
@@ -1079,7 +1079,7 @@
     {
       "ecosystem": "cargo",
       "name": "bitflags",
-      "version": "2.11.0",
+      "version": "2.11.1",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/bitflags/bitflags",
       "author": "The Rust Project Developers"
@@ -1087,7 +1087,7 @@
     {
       "ecosystem": "cargo",
       "name": "bitstream-io",
-      "version": "4.9.0",
+      "version": "4.10.0",
       "license": "MIT/Apache-2.0",
       "homepage": "https://github.com/tuffy/bitstream-io",
       "author": "Brian Langenberger <bjl@usa.net>"
@@ -1223,7 +1223,7 @@
     {
       "ecosystem": "cargo",
       "name": "cc",
-      "version": "1.2.58",
+      "version": "1.2.60",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/rust-lang/cc-rs",
       "author": "Alex Crichton <alex@alexcrichton.com>"
@@ -1339,14 +1339,6 @@
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/servo/core-foundation-rs",
       "author": "The Servo Project Developers"
-    },
-    {
-      "ecosystem": "cargo",
-      "name": "core2",
-      "version": "0.4.0",
-      "license": "Apache-2.0 OR MIT",
-      "homepage": "https://github.com/bbqsrc/core2",
-      "author": "Brendan Molloy <brendan@bbqsrc.net>"
     },
     {
       "ecosystem": "cargo",
@@ -1695,7 +1687,7 @@
     {
       "ecosystem": "cargo",
       "name": "fastrand",
-      "version": "2.3.0",
+      "version": "2.4.1",
       "license": "Apache-2.0 OR MIT",
       "homepage": "https://github.com/smol-rs/fastrand",
       "author": "Stjepan Glavina <stjepang@gmail.com>"
@@ -1999,7 +1991,7 @@
     {
       "ecosystem": "cargo",
       "name": "gif",
-      "version": "0.14.1",
+      "version": "0.14.2",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/image-rs/image-gif",
       "author": "The image-rs Developers"
@@ -2119,7 +2111,7 @@
     {
       "ecosystem": "cargo",
       "name": "hashbrown",
-      "version": "0.16.1",
+      "version": "0.17.0",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/rust-lang/hashbrown",
       "author": "Amanieu d'Antras <amanieu@gmail.com>"
@@ -2199,7 +2191,7 @@
     {
       "ecosystem": "cargo",
       "name": "hyper-rustls",
-      "version": "0.27.7",
+      "version": "0.27.9",
       "license": "Apache-2.0 OR ISC OR MIT",
       "homepage": "https://github.com/rustls/hyper-rustls",
       "author": ""
@@ -2223,7 +2215,7 @@
     {
       "ecosystem": "cargo",
       "name": "hyper",
-      "version": "1.8.1",
+      "version": "1.9.0",
       "license": "MIT",
       "homepage": "https://hyper.rs",
       "author": "Sean McArthur <sean@seanmonstar.com>"
@@ -2255,7 +2247,7 @@
     {
       "ecosystem": "cargo",
       "name": "icu_collections",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "license": "Unicode-3.0",
       "homepage": "https://icu4x.unicode.org",
       "author": "The ICU4X Project Developers"
@@ -2263,7 +2255,7 @@
     {
       "ecosystem": "cargo",
       "name": "icu_locale_core",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "license": "Unicode-3.0",
       "homepage": "https://icu4x.unicode.org",
       "author": "The ICU4X Project Developers"
@@ -2271,7 +2263,7 @@
     {
       "ecosystem": "cargo",
       "name": "icu_normalizer_data",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "license": "Unicode-3.0",
       "homepage": "https://icu4x.unicode.org",
       "author": "The ICU4X Project Developers"
@@ -2279,7 +2271,7 @@
     {
       "ecosystem": "cargo",
       "name": "icu_normalizer",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "license": "Unicode-3.0",
       "homepage": "https://icu4x.unicode.org",
       "author": "The ICU4X Project Developers"
@@ -2287,7 +2279,7 @@
     {
       "ecosystem": "cargo",
       "name": "icu_properties_data",
-      "version": "2.1.2",
+      "version": "2.2.0",
       "license": "Unicode-3.0",
       "homepage": "https://icu4x.unicode.org",
       "author": "The ICU4X Project Developers"
@@ -2295,7 +2287,7 @@
     {
       "ecosystem": "cargo",
       "name": "icu_properties",
-      "version": "2.1.2",
+      "version": "2.2.0",
       "license": "Unicode-3.0",
       "homepage": "https://icu4x.unicode.org",
       "author": "The ICU4X Project Developers"
@@ -2303,7 +2295,7 @@
     {
       "ecosystem": "cargo",
       "name": "icu_provider",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "license": "Unicode-3.0",
       "homepage": "https://icu4x.unicode.org",
       "author": "The ICU4X Project Developers"
@@ -2383,7 +2375,7 @@
     {
       "ecosystem": "cargo",
       "name": "indexmap",
-      "version": "2.13.0",
+      "version": "2.14.0",
       "license": "Apache-2.0 OR MIT",
       "homepage": "https://github.com/indexmap-rs/indexmap",
       "author": ""
@@ -2511,7 +2503,7 @@
     {
       "ecosystem": "cargo",
       "name": "js-sys",
-      "version": "0.3.92",
+      "version": "0.3.95",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://wasm-bindgen.github.io/wasm-bindgen/",
       "author": "The wasm-bindgen Developers"
@@ -2591,7 +2583,7 @@
     {
       "ecosystem": "cargo",
       "name": "libc",
-      "version": "0.2.183",
+      "version": "0.2.185",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/rust-lang/libc",
       "author": "The Rust Project Developers"
@@ -2615,7 +2607,7 @@
     {
       "ecosystem": "cargo",
       "name": "libredox",
-      "version": "0.1.15",
+      "version": "0.1.16",
       "license": "MIT",
       "homepage": "https://gitlab.redox-os.org/redox-os/libredox",
       "author": "4lDO2 <4lDO2@protonmail.com>"
@@ -2631,7 +2623,7 @@
     {
       "ecosystem": "cargo",
       "name": "litemap",
-      "version": "0.8.1",
+      "version": "0.8.2",
       "license": "Unicode-3.0",
       "homepage": "https://github.com/unicode-org/icu4x",
       "author": "The ICU4X Project Developers"
@@ -2767,9 +2759,9 @@
     {
       "ecosystem": "cargo",
       "name": "muda",
-      "version": "0.17.1",
+      "version": "0.17.2",
       "license": "Apache-2.0 OR MIT",
-      "homepage": "https://github.com/amrbashir/muda",
+      "homepage": "https://github.com/tauri-apps/muda",
       "author": ""
     },
     {
@@ -2819,6 +2811,14 @@
       "license": "MIT",
       "homepage": "https://github.com/mbrubeck/rust-debug-unreachable",
       "author": "Matt Brubeck <mbrubeck@limpet.net>, Jonathan Reem <jonathan.reem@gmail.com>"
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "no_std_io2",
+      "version": "0.9.3",
+      "license": "Apache-2.0 OR MIT",
+      "homepage": "https://github.com/wcampbell0x2a/no-std-io2",
+      "author": ""
     },
     {
       "ecosystem": "cargo",
@@ -3031,7 +3031,7 @@
     {
       "ecosystem": "cargo",
       "name": "openssl-sys",
-      "version": "0.9.112",
+      "version": "0.9.114",
       "license": "MIT",
       "homepage": "https://github.com/rust-openssl/rust-openssl",
       "author": "Alex Crichton <alex@alexcrichton.com>, Steven Fackler <sfackler@gmail.com>"
@@ -3039,7 +3039,7 @@
     {
       "ecosystem": "cargo",
       "name": "openssl",
-      "version": "0.10.76",
+      "version": "0.10.78",
       "license": "Apache-2.0",
       "homepage": "https://github.com/rust-openssl/rust-openssl",
       "author": "Steven Fackler <sfackler@gmail.com>"
@@ -3262,16 +3262,8 @@
     },
     {
       "ecosystem": "cargo",
-      "name": "pin-utils",
-      "version": "0.1.0",
-      "license": "MIT OR Apache-2.0",
-      "homepage": "https://github.com/rust-lang-nursery/pin-utils",
-      "author": "Josef Brandl <mail@josefbrandl.de>"
-    },
-    {
-      "ecosystem": "cargo",
       "name": "pkg-config",
-      "version": "0.3.32",
+      "version": "0.3.33",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/rust-lang/pkg-config-rs",
       "author": "Alex Crichton <alex@alexcrichton.com>"
@@ -3303,7 +3295,7 @@
     {
       "ecosystem": "cargo",
       "name": "potential_utf",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "license": "Unicode-3.0",
       "homepage": "https://icu4x.unicode.org",
       "author": "The ICU4X Project Developers"
@@ -3415,7 +3407,7 @@
     {
       "ecosystem": "cargo",
       "name": "pxfm",
-      "version": "0.1.28",
+      "version": "0.1.29",
       "license": "BSD-3-Clause OR Apache-2.0",
       "homepage": "https://github.com/awxkee/pxfm",
       "author": "Radzivon Bartoshyk"
@@ -3543,7 +3535,7 @@
     {
       "ecosystem": "cargo",
       "name": "rand",
-      "version": "0.8.5",
+      "version": "0.8.6",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://rust-random.github.io/book",
       "author": "The Rand Project Developers, The Rust Project Developers"
@@ -3551,7 +3543,7 @@
     {
       "ecosystem": "cargo",
       "name": "rand",
-      "version": "0.9.2",
+      "version": "0.9.4",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://rust-random.github.io/book",
       "author": "The Rand Project Developers, The Rust Project Developers"
@@ -3591,7 +3583,7 @@
     {
       "ecosystem": "cargo",
       "name": "rayon",
-      "version": "1.11.0",
+      "version": "1.12.0",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/rayon-rs/rayon",
       "author": ""
@@ -3727,7 +3719,7 @@
     {
       "ecosystem": "cargo",
       "name": "rustls-webpki",
-      "version": "0.103.10",
+      "version": "0.103.12",
       "license": "ISC",
       "homepage": "https://github.com/rustls/webpki",
       "author": ""
@@ -3735,7 +3727,7 @@
     {
       "ecosystem": "cargo",
       "name": "rustls",
-      "version": "0.23.37",
+      "version": "0.23.38",
       "license": "Apache-2.0 OR ISC OR MIT",
       "homepage": "https://github.com/rustls/rustls",
       "author": ""
@@ -3847,7 +3839,7 @@
     {
       "ecosystem": "cargo",
       "name": "semver",
-      "version": "1.0.27",
+      "version": "1.0.28",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/dtolnay/semver",
       "author": "David Tolnay <dtolnay@gmail.com>"
@@ -3903,7 +3895,7 @@
     {
       "ecosystem": "cargo",
       "name": "serde_spanned",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/toml-rs/toml",
       "author": ""
@@ -4263,7 +4255,7 @@
     {
       "ecosystem": "cargo",
       "name": "tauri-plugin-dialog",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "license": "Apache-2.0 OR MIT",
       "homepage": "https://github.com/tauri-apps/plugins-workspace",
       "author": "Tauri Programme within The Commons Conservancy"
@@ -4271,7 +4263,7 @@
     {
       "ecosystem": "cargo",
       "name": "tauri-plugin-fs",
-      "version": "2.4.5",
+      "version": "2.5.0",
       "license": "Apache-2.0 OR MIT",
       "homepage": "https://github.com/tauri-apps/plugins-workspace",
       "author": "Tauri Programme within The Commons Conservancy"
@@ -4415,7 +4407,7 @@
     {
       "ecosystem": "cargo",
       "name": "tinystr",
-      "version": "0.8.2",
+      "version": "0.8.3",
       "license": "Unicode-3.0",
       "homepage": "https://github.com/unicode-org/icu4x",
       "author": "The ICU4X Project Developers"
@@ -4447,7 +4439,7 @@
     {
       "ecosystem": "cargo",
       "name": "tokio",
-      "version": "1.50.0",
+      "version": "1.52.1",
       "license": "MIT",
       "homepage": "https://tokio.rs",
       "author": "Tokio Contributors <team@tokio.rs>"
@@ -4471,7 +4463,7 @@
     {
       "ecosystem": "cargo",
       "name": "toml_datetime",
-      "version": "1.1.0+spec-1.1.0",
+      "version": "1.1.1+spec-1.1.0",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/toml-rs/toml",
       "author": ""
@@ -4495,7 +4487,7 @@
     {
       "ecosystem": "cargo",
       "name": "toml_edit",
-      "version": "0.25.8+spec-1.1.0",
+      "version": "0.25.11+spec-1.1.0",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/toml-rs/toml",
       "author": ""
@@ -4503,7 +4495,7 @@
     {
       "ecosystem": "cargo",
       "name": "toml_parser",
-      "version": "1.1.0+spec-1.1.0",
+      "version": "1.1.2+spec-1.1.0",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/toml-rs/toml",
       "author": ""
@@ -4511,7 +4503,7 @@
     {
       "ecosystem": "cargo",
       "name": "toml_writer",
-      "version": "1.1.0+spec-1.1.0",
+      "version": "1.1.1+spec-1.1.0",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/toml-rs/toml",
       "author": ""
@@ -4615,7 +4607,7 @@
     {
       "ecosystem": "cargo",
       "name": "typenum",
-      "version": "1.19.0",
+      "version": "1.20.0",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/paholg/typenum",
       "author": "Paho Lurie-Gregg <paho@paholg.com>, Andre Bogus <bogusandre@gmail.com>"
@@ -4727,7 +4719,7 @@
     {
       "ecosystem": "cargo",
       "name": "uuid",
-      "version": "1.23.0",
+      "version": "1.23.1",
       "license": "Apache-2.0 OR MIT",
       "homepage": "https://github.com/uuid-rs/uuid",
       "author": "Ashley Mannix<ashleymannix@live.com.au>, Dylan DPC<dylan.dpc@gmail.com>, Hunar Roop Kahlon<hunar.roop@gmail.com>"
@@ -4815,7 +4807,7 @@
     {
       "ecosystem": "cargo",
       "name": "wasip2",
-      "version": "1.0.2+wasi-0.2.9",
+      "version": "1.0.3+wasi-0.2.9",
       "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
       "homepage": "https://github.com/bytecodealliance/wasi-rs",
       "author": ""
@@ -4831,7 +4823,7 @@
     {
       "ecosystem": "cargo",
       "name": "wasm-bindgen-futures",
-      "version": "0.4.65",
+      "version": "0.4.68",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://wasm-bindgen.github.io/wasm-bindgen/",
       "author": "The wasm-bindgen Developers"
@@ -4839,7 +4831,7 @@
     {
       "ecosystem": "cargo",
       "name": "wasm-bindgen-macro-support",
-      "version": "0.2.115",
+      "version": "0.2.118",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://wasm-bindgen.github.io/wasm-bindgen/",
       "author": "The wasm-bindgen Developers"
@@ -4847,7 +4839,7 @@
     {
       "ecosystem": "cargo",
       "name": "wasm-bindgen-macro",
-      "version": "0.2.115",
+      "version": "0.2.118",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://wasm-bindgen.github.io/wasm-bindgen/",
       "author": "The wasm-bindgen Developers"
@@ -4855,7 +4847,7 @@
     {
       "ecosystem": "cargo",
       "name": "wasm-bindgen-shared",
-      "version": "0.2.115",
+      "version": "0.2.118",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://wasm-bindgen.github.io/wasm-bindgen/",
       "author": "The wasm-bindgen Developers"
@@ -4863,7 +4855,7 @@
     {
       "ecosystem": "cargo",
       "name": "wasm-bindgen",
-      "version": "0.2.115",
+      "version": "0.2.118",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://wasm-bindgen.github.io/wasm-bindgen",
       "author": "The wasm-bindgen Developers"
@@ -4903,7 +4895,7 @@
     {
       "ecosystem": "cargo",
       "name": "web_atoms",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/servo/html5ever",
       "author": "The html5ever Project Developers"
@@ -4911,7 +4903,7 @@
     {
       "ecosystem": "cargo",
       "name": "web-sys",
-      "version": "0.3.92",
+      "version": "0.3.95",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://wasm-bindgen.github.io/wasm-bindgen/web-sys/index.html",
       "author": "The wasm-bindgen Developers"
@@ -4919,7 +4911,7 @@
     {
       "ecosystem": "cargo",
       "name": "webbrowser",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "license": "MIT OR Apache-2.0",
       "homepage": "https://github.com/amodm/webbrowser-rs",
       "author": "Amod Malviya @amodm"
@@ -5423,7 +5415,7 @@
     {
       "ecosystem": "cargo",
       "name": "winnow",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "license": "MIT",
       "homepage": "https://github.com/winnow-rs/winnow",
       "author": ""
@@ -5470,6 +5462,14 @@
     },
     {
       "ecosystem": "cargo",
+      "name": "wit-bindgen",
+      "version": "0.57.1",
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "homepage": "https://github.com/bytecodealliance/wit-bindgen",
+      "author": "Alex Crichton <alex@alexcrichton.com>"
+    },
+    {
+      "ecosystem": "cargo",
       "name": "wit-component",
       "version": "0.244.0",
       "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
@@ -5487,7 +5487,7 @@
     {
       "ecosystem": "cargo",
       "name": "writeable",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "license": "Unicode-3.0",
       "homepage": "https://github.com/unicode-org/icu4x",
       "author": "The ICU4X Project Developers"
@@ -5527,7 +5527,7 @@
     {
       "ecosystem": "cargo",
       "name": "yoke-derive",
-      "version": "0.8.1",
+      "version": "0.8.2",
       "license": "Unicode-3.0",
       "homepage": "https://github.com/unicode-org/icu4x",
       "author": "Manish Goregaokar <manishsmail@gmail.com>"
@@ -5535,7 +5535,7 @@
     {
       "ecosystem": "cargo",
       "name": "yoke",
-      "version": "0.8.1",
+      "version": "0.8.2",
       "license": "Unicode-3.0",
       "homepage": "https://github.com/unicode-org/icu4x",
       "author": "Manish Goregaokar <manishsmail@gmail.com>"
@@ -5559,7 +5559,7 @@
     {
       "ecosystem": "cargo",
       "name": "zerofrom-derive",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "license": "Unicode-3.0",
       "homepage": "https://github.com/unicode-org/icu4x",
       "author": "Manish Goregaokar <manishsmail@gmail.com>"
@@ -5567,7 +5567,7 @@
     {
       "ecosystem": "cargo",
       "name": "zerofrom",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "license": "Unicode-3.0",
       "homepage": "https://github.com/unicode-org/icu4x",
       "author": "Manish Goregaokar <manishsmail@gmail.com>"
@@ -5583,7 +5583,7 @@
     {
       "ecosystem": "cargo",
       "name": "zerotrie",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "license": "Unicode-3.0",
       "homepage": "https://icu4x.unicode.org",
       "author": "The ICU4X Project Developers"
@@ -5591,7 +5591,7 @@
     {
       "ecosystem": "cargo",
       "name": "zerovec-derive",
-      "version": "0.11.2",
+      "version": "0.11.3",
       "license": "Unicode-3.0",
       "homepage": "https://github.com/unicode-org/icu4x",
       "author": "Manish Goregaokar <manishsmail@gmail.com>"
@@ -5599,7 +5599,7 @@
     {
       "ecosystem": "cargo",
       "name": "zerovec",
-      "version": "0.11.5",
+      "version": "0.11.6",
       "license": "Unicode-3.0",
       "homepage": "https://github.com/unicode-org/icu4x",
       "author": "The ICU4X Project Developers"

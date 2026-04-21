@@ -30,5 +30,7 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf
+      - name: Create frontend dist stub for macro
+        run: mkdir -p dist
       - run: cargo check
         working-directory: src-tauri

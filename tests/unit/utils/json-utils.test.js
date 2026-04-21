@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     buildJsonDiffSummary,
     flattenJson,
+    formatJsonPreviewText,
     formatJsonValue,
     normalizeJsonText,
     tryFormatJsonPretty,
@@ -44,5 +45,25 @@ describe('json-utils', () => {
         expect(formatJsonValue(12)).toBe('12');
         expect(formatJsonValue(false)).toBe('false');
         expect(formatJsonValue(null)).toBe('null');
+    });
+
+    it('formats JSON preview text and reports valid JSON', () => {
+        const result = formatJsonPreviewText('{"a":1}', 100);
+        expect(result.formattedText).toBe('{\n  "a": 1\n}');
+        expect(result.isJson).toBe(true);
+        expect(result.isTruncated).toBe(false);
+    });
+
+    it('keeps raw text for invalid JSON preview content', () => {
+        const result = formatJsonPreviewText('{bad', 100);
+        expect(result.formattedText).toBe('{bad');
+        expect(result.isJson).toBe(false);
+        expect(result.isTruncated).toBe(false);
+    });
+
+    it('truncates formatted preview text when over limit', () => {
+        const result = formatJsonPreviewText('{"a":"1234567890"}', 12);
+        expect(result.isTruncated).toBe(true);
+        expect(result.formattedText.endsWith('... (truncated)')).toBe(true);
     });
 });

@@ -19,11 +19,13 @@
 | M4A/WAV | ❌ Not implemented | ❌ | ❌ | ✅ |
 | MP4/MOV | ✅ User data atoms | ✅ | ❌ | ✅ |
 | AVI/MKV | ❌ Not implemented | ❌ | ❌ | ✅ |
+| **JSON** | ✅ Card fields (character card schema) | ✅ Import to card editor | ❌ | ✅ Pretty-print |
 
 ---
 
 ## What's New
 
+- **JSON file support** - Browse `.json` files in the folder view; card-schema JSON opens Card Editor with all fields populated; non-card JSON shows formatted preview; `.json` can also be opened via drag-drop or file picker
 - **LLM-assisted field generation** - Per-field AI generation with regenerate/revert,
   generate all button, editable prompt templates, model discovery, and enforced
   `{{char}}`/`{{user}}` placeholders in first-message/scenario generation

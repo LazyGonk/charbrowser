@@ -67,6 +67,20 @@ describe('drag-drop dropped-path routing', () => {
         expect(onFileDropped).not.toHaveBeenCalled();
     });
 
+    it('routes create-mode JSON drops to card editor import flow', async () => {
+        state.cardEditorMode = 'create';
+        getPathInfo.mockResolvedValueOnce({ isDirectory: false, isFile: true });
+        const onFileDropped = vi.fn();
+        const onDirectoryDropped = vi.fn();
+        const onCardEditorDrop = vi.fn();
+
+        await routeDroppedPath('D:/cards/character.json', onFileDropped, onDirectoryDropped, onCardEditorDrop);
+
+        expect(onCardEditorDrop).toHaveBeenCalledWith(null, 'D:/cards/character.json');
+        expect(onDirectoryDropped).not.toHaveBeenCalled();
+        expect(onFileDropped).not.toHaveBeenCalled();
+    });
+
     it('falls back to regular file open for non-directory drops', async () => {
         getPathInfo.mockResolvedValueOnce({ isDirectory: false, isFile: true });
         const onFileDropped = vi.fn();

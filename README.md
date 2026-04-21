@@ -58,6 +58,7 @@ npm run tauri build # production
 - **Images**: PNG, JPEG, GIF, BMP, WebP, FITS, TIFF
 - **Video**: MP4, MOV, AVI, MKV
 - **Audio**: MP3, WAV, FLAC, OGG, M4A
+- **Other**: JSON (preview + character card import)
 
 ## License
 

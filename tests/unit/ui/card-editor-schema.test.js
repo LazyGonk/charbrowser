@@ -87,4 +87,24 @@ describe('card-editor detectSchemaVersion', () => {
         expect(detectSchemaVersion({ spec: 'chara_card_v2', spec_version: '2.0', data: {} })).toBe('2.0');
         expect(detectSchemaVersion({ spec: 'chara_card_v3', spec_version: '3.0', data: {} })).toBe('3.0');
     });
+
+    it('recognizes wrapped card payloads as card-like after unwrapping', async () => {
+        const { isCardLike, unwrapCardData } = await import('../../../src/ui/card-editor.js');
+        const payload = {
+            spec: 'chara_card_v3',
+            spec_version: '3.0',
+            data: {
+                name: 'Unit Test Character',
+                description: 'Test description',
+                first_mes: 'Hello',
+            },
+        };
+
+        expect(isCardLike(unwrapCardData(payload))).toBe(true);
+    });
+
+    it('rejects non-card JSON payloads', async () => {
+        const { isCardLike } = await import('../../../src/ui/card-editor.js');
+        expect(isCardLike({ foo: 'bar' })).toBe(false);
+    });
 });

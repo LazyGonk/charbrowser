@@ -15,6 +15,45 @@ export function tryFormatJsonPretty(text) {
 }
 
 /**
+ * Formats JSON preview text and truncates very large payloads for UI rendering.
+ * @param {string} text Raw JSON or text input.
+ * @param {number} maxLength Maximum output characters before truncation.
+ * @returns {{formattedText: string, isJson: boolean, isTruncated: boolean}}
+ */
+export function formatJsonPreviewText(text, maxLength) {
+    const raw = typeof text === 'string' ? text : '';
+    const safeMaxLength = Number.isFinite(Number(maxLength))
+        ? Math.max(0, Number(maxLength))
+        : raw.length;
+
+    let formatted = raw;
+    let isJson = false;
+    try {
+        const parsed = JSON.parse(raw);
+        formatted = JSON.stringify(parsed, null, 2);
+        isJson = true;
+    } catch {
+        // Keep raw text for invalid JSON payloads.
+    }
+
+    if (formatted.length <= safeMaxLength) {
+        return {
+            formattedText: formatted,
+            isJson,
+            isTruncated: false,
+        };
+    }
+
+    const suffix = '\n... (truncated)';
+    const keepLength = Math.max(0, safeMaxLength - suffix.length);
+    return {
+        formattedText: `${formatted.slice(0, keepLength)}${suffix}`,
+        isJson,
+        isTruncated: true,
+    };
+}
+
+/**
  * Normalizes JSON text into deterministic pretty format.
  * @param {string} text JSON string.
  * @returns {string} Pretty-printed JSON string.

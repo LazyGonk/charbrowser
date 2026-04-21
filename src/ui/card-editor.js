@@ -2425,12 +2425,12 @@ export async function stopCreateCardMode(options = {}) {
         dom.dropZone.style.display = 'flex';
     }
     if (dom.dropZoneTitle) {
-        dom.dropZoneTitle.textContent = hasFolder ? 'Select a file to inspect' : 'Drop a file here';
+        dom.dropZoneTitle.textContent = hasFolder ? 'Select a file to inspect' : 'Drop a file or folder here';
     }
     if (dom.dropZoneHint) {
         dom.dropZoneHint.textContent = hasFolder
             ? 'Choose a file from the folder list or start a new card.'
-            : 'or click "Open Folder" to browse files';
+            : 'or click here to open a folder or JSON file';
     }
     hideCardEditor();
     showMetadataSections();

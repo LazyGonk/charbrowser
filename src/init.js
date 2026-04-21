@@ -1,12 +1,12 @@
 import { dom } from './dom.js';
 import { COPY_STATUS_RESET_MS, SURPRISE_OVERLAY_AUTO_HIDE_MS } from './constants.js';
 import { loadEmbeddedJsonEntries, loadFileMetadataData } from './services/metadata-service.js';
-import { getImageDataUrl, pickDirectory } from './services/tauri-api.js';
+import { getImageDataUrl, pickDirectory, pickOpenJsonPath, readTextFile } from './services/tauri-api.js';
 import { formatFileSize, getExtension, getFileName } from './utils/file-utils.js';
 import { collectCopyableMetadataPairs } from './utils/metadata-utils.js';
 import { SURPRISE_SEQUENCE, getNextSurpriseIndex } from './utils/surprise-utils.js';
 import { state } from './state.js';
-import { applyFolderFilters, initFolderFilters, loadDirectory, selectFileInList, setCreateNewCardHandler, deleteSelectedFile } from './ui/folder-view.js';
+import { applyFolderFilters, initFolderFilters, loadDirectory, selectFileInList, setCreateNewCardHandler, deleteSelectedFile, updateNewCardEntryVisibility } from './ui/folder-view.js';
 import { getPreferredEmbeddedJsonText, initEmbeddedJsonUI, loadEmbeddedBase64Json, updateCharacterTextPanel } from './ui/embedded-json.js';
 import { initDragDrop } from './ui/drag-drop.js';
 import { initKeyboardNavigation, isTextEditingContext } from './ui/keyboard-nav.js';
@@ -25,6 +25,7 @@ import {
     findCardPayload,
     handleCreateModeJsonPathDrop,
     importJsonText,
+    isCardLike,
     populateFromCard,
     setCreateImageFromDataUrl,
     setCreateImageFromFile,
@@ -33,6 +34,7 @@ import {
     startCreateCardMode,
     stopCreateCardMode,
     syncCardEditorFromSelection,
+    unwrapCardData,
 } from './ui/card-editor.js';
 
 let previousSchemaVersion = '2.0';
@@ -144,17 +146,93 @@ async function openDirectoryPath(directory) {
 
 /**
  * Opens the folder picker and switches directories after resolving card-editor exit state.
+ * @returns {Promise<boolean>}
  */
 async function openDirectoryFromPicker() {
     try {
         const directory = await pickDirectory();
         if (!directory) {
-            return;
+            return false;
         }
 
-        await openDirectoryPath(directory);
+        return await openDirectoryPath(directory);
     } catch (error) {
         dom.folderPath.textContent = `Open folder failed: ${String(error)}`;
+        return false;
+    }
+}
+
+/**
+ * Opens one JSON file through native picker and routes it through regular file load flow.
+ * @returns {Promise<boolean>}
+ */
+async function openJsonFromPicker() {
+    try {
+        const filePath = await pickOpenJsonPath();
+        if (!filePath) {
+            return false;
+        }
+
+        await loadFileMetadata(filePath);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Opens folder picker first, then falls back to JSON file picker when canceled.
+ */
+async function openFolderOrJsonFromPicker() {
+    const openedFolder = await openDirectoryFromPicker();
+    if (openedFolder) {
+        return;
+    }
+    await openJsonFromPicker();
+}
+
+/**
+ * Returns true when one JSON file should be imported as a character card into create mode.
+ * @param {string} filePath
+ * @param {number} requestToken
+ * @returns {Promise<boolean>}
+ */
+async function maybeOpenJsonAsCardEditor(filePath, requestToken) {
+    if (getExtension(filePath) !== 'json') {
+        return false;
+    }
+
+    try {
+        const jsonText = await readTextFile(filePath);
+        if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
+            return true;
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(jsonText);
+        } catch {
+            return false;
+        }
+
+        const unwrapped = unwrapCardData(parsed);
+        if (!isCardLike(unwrapped)) {
+            return false;
+        }
+
+        const started = await startCreateCardMode();
+        if (!started) {
+            return true;
+        }
+
+        await importJsonText(jsonText);
+        discardUnsavedCardChanges();
+        state.selectedFile = filePath;
+        selectFileInList(filePath);
+        updateNewCardEntryVisibility();
+        return true;
+    } catch {
+        return false;
     }
 }
 
@@ -162,7 +240,7 @@ async function openDirectoryFromPicker() {
  * Loads metadata and all dependent UI panels for one selected file.
  * @param {string} filePath
  */
-export async function loadFileMetadata(filePath) {
+export async function loadFileMetadata(filePath, { autoSelected = false } = {}) {
     const previousSelected = state.selectedFile;
 
     if (!(await canLeaveCurrentCardContext(previousSelected))) {
@@ -180,12 +258,16 @@ export async function loadFileMetadata(filePath) {
     try {
         state.preserveEmptySelection = false;
         state.selectedFile = filePath;
+        const ext = getExtension(filePath);
+
+        if (!autoSelected && await maybeOpenJsonAsCardEditor(filePath, requestToken)) {
+            return;
+        }
+
         const metadata = await loadFileMetadataData(filePath);
         if (requestToken !== state.metadataLoadToken || state.selectedFile !== filePath) {
             return;
         }
-
-        const ext = getExtension(filePath);
 
         dom.dropZone.style.display = 'none';
         dom.metadataView.style.display = 'flex';
@@ -275,7 +357,7 @@ export async function clearSelection() {
         dom.dropZoneTitle.textContent = 'Drop a file or folder here';
     }
     if (dom.dropZoneHint) {
-        dom.dropZoneHint.textContent = 'or click here to open a folder';
+        dom.dropZoneHint.textContent = 'or click here to open a folder or JSON file';
     }
 
     // Clear preview
@@ -527,9 +609,9 @@ export async function initApp() {
         await openDirectoryFromPicker();
     });
 
-    // Clicking the drop zone opens a folder picker, same as the Open Folder toolbar button.
+    // Clicking the drop zone opens folder picker first and then JSON picker as fallback.
     dom.dropZone?.addEventListener('click', async () => {
-        await openDirectoryFromPicker();
+        await openFolderOrJsonFromPicker();
     });
 
     dom.copyMetadataBtn?.addEventListener('click', copyAllMetadata);

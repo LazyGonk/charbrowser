@@ -169,6 +169,22 @@
     font-size: 14px;
 }
 
+.no-preview.json-preview-message {
+    width: 100%;
+    max-height: 100%;
+    text-align: left;
+    overflow: auto;
+}
+
+.json-preview-content {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.4;
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
 .character-text-panel {
     width: min(42%, 560px);
     min-width: 280px;

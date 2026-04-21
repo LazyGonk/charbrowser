@@ -5,7 +5,8 @@
 export const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'fits', 'fit', 'tif', 'tiff', 'nef', 'arw', 'orf', 'pef', 'rw2', 'dng']);
 export const VIDEO_EXTS = new Set(['mp4', 'mov', 'avi', 'mkv']);
 export const AUDIO_EXTS = new Set(['mp3', 'wav', 'flac', 'ogg', 'm4a']);
-export const MEDIA_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...AUDIO_EXTS]);
+export const JSON_EXTS = new Set(['json']);
+export const MEDIA_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...AUDIO_EXTS, ...JSON_EXTS]);
 
 export const THUMBNAIL_CONCURRENCY = 4;
 export const THUMBNAIL_SIZE = 64;
@@ -38,7 +39,7 @@ export const COMFYUI_DEFAULT_HEIGHT = 1200;
 // Limits
 export const LLM_HISTORY_LIMIT = 8;
 export const FILTER_DEFAULT_CONCURRENCY = 4;
-export const JSON_PREVIEW_MAX_LENGTH = 200;
+export const JSON_PREVIEW_MAX_LENGTH = 50000;
 export const THUMBNAIL_LOAD_MARGIN = '200px';
 
 export const SIDEBAR_MIN = 180;
