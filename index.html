@@ -10,12 +10,13 @@
     <div id="app">
         <div class="toolbar">
             <button id="openFolderBtn" class="btn">📁 Open Folder</button>
+            <button id="bulkEditBtn" class="btn btn-secondary" disabled>🧺 Bulk Edit (0)</button>
             <button id="createCardBtn" class="btn btn-secondary">✨ Create New</button>
             <button id="clearSelectionBtn" class="btn btn-secondary" style="display: none;">🗑️ Clear View</button>
             <button id="assistantToggleBtn" class="btn btn-secondary">🤖 AI Assistant</button>
-            <div class="toolbar-tip">Tip: Use Arrow Up/Down to select files.</div>
             <button id="openSettingsBtn" class="btn btn-secondary" title="Open settings">⚙️ Settings</button>
             <button id="showLicensesBtn" class="btn btn-secondary">📜 Licenses</button>
+            <div class="toolbar-tip">Tip: Use Arrow Up/Down to select files.</div>
         </div>
         
         <div class="main-container">
@@ -341,6 +342,72 @@
                 <button id="assistantSendBtn" class="btn" type="button">Send</button>
             </div>
         </section>
+    </div>
+
+    <div id="bulkEditModal" class="json-diff-modal" style="display: none;" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="bulkEditTitle">
+        <div class="json-diff-dialog bulk-edit-dialog">
+            <h3 id="bulkEditTitle">Bulk Edit</h3>
+            <div class="bulk-edit-controls">
+                <label class="bulk-edit-field">
+                    <span>Operation</span>
+                    <select id="bulkEditOperation" class="folder-filter-select"></select>
+                </label>
+                <label class="bulk-edit-field">
+                    <span>Field / keyword / JSON Pointer</span>
+                    <input id="bulkEditLocator" class="folder-filter-input" type="text" placeholder="e.g. Artist, OBJECT, /data/creator" />
+                </label>
+                <label class="bulk-edit-field">
+                    <span>New value</span>
+                    <input id="bulkEditValue" class="folder-filter-input" type="text" placeholder="New value" />
+                </label>
+            </div>
+            <p class="bulk-edit-hint">
+                JSON Pointer paths are written as strings: <code>/data/creator</code>, escape <code>~</code> as <code>~0</code>
+                and <code>/</code> as <code>~1</code>. Missing parents, array append (<code>-</code>), root replacement,
+                and v1 cards are rejected per file without a write.
+            </p>
+            <div class="bulk-edit-discovery">
+                <div class="bulk-edit-discovery-header">
+                    <span class="bulk-edit-discovery-title">Existing fields</span>
+                    <span id="bulkEditDiscoverySummary" class="bulk-edit-discovery-summary"></span>
+                </div>
+                <div
+                    id="bulkEditDiscovery"
+                    class="bulk-edit-discovery-list"
+                    role="group"
+                    aria-label="Existing fields in the selected files"
+                ></div>
+            </div>
+            <div id="bulkEditSummary" class="json-diff-summary"></div>
+            <div class="bulk-edit-table-wrap">
+                <table class="licenses-table bulk-edit-table">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Status</th>
+                            <th>Change</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bulkEditTableBody"></tbody>
+                </table>
+            </div>
+            <div id="bulkEditStatus" class="folder-filter-status" role="status" aria-live="polite"></div>
+            <div id="bulkEditResults" class="bulk-edit-results"></div>
+            <div id="bulkEditJournalPath" class="bulk-edit-journal"></div>
+            <div id="bulkEditConfirm" class="bulk-edit-confirm" style="display: none;" role="group" aria-label="Apply confirmation">
+                <span id="bulkEditConfirmMessage"></span>
+                <button id="bulkEditConfirmApplyBtn" class="btn btn-small" type="button">✅ Apply</button>
+                <button id="bulkEditCancelApplyBtn" class="btn btn-secondary btn-small" type="button">❌ Cancel</button>
+            </div>
+            <div class="json-diff-actions">
+                <button id="bulkEditSelectAllBtn" class="btn btn-secondary btn-small" type="button">Select all visible</button>
+                <button id="bulkEditClearSelectionBtn" class="btn btn-secondary btn-small" type="button">Clear selection</button>
+                <button id="bulkEditPlanBtn" class="btn" type="button">🧮 Plan</button>
+                <button id="bulkEditApplyBtn" class="btn" type="button" disabled>✅ Apply</button>
+                <button id="bulkEditCloseBtn" class="btn btn-secondary" type="button">✕ Close</button>
+            </div>
+        </div>
     </div>
 
     <div id="jsonDiffModal" class="json-diff-modal" style="display: none;">

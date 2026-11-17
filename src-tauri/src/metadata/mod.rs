@@ -6,12 +6,14 @@ use std::path::Path;
 pub mod types;
 pub mod utils;
 pub mod image;
+pub mod exif;
 pub mod audio;
 pub mod video;
 pub mod fits;
 
 use fits::extract_fits_metadata;
 pub mod embedded;
+pub mod json_pointer;
 
 pub use types::{EmbeddedJsonEntry, FileFilterInfo, FileMetadata, TextEntry};
 
@@ -68,6 +70,42 @@ fn display_file_name(path: &Path) -> String {
 
 fn display_file_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
+}
+
+/// Key set in `format_specific` when a file was routed as an image but the
+/// decoder rejected its contents.
+///
+/// Its presence is what distinguishes "decode failed" from "no metadata at
+/// all" (empty `format_specific`); its string value is the decoder's reason.
+/// Frontends should treat the key as the error channel for image files.
+pub const DECODE_ERROR_KEY: &str = "decode_error";
+
+/// Builds the payload for an image whose bytes the decoder could not read.
+///
+/// The file was identified as an image by its signature or extension, so the
+/// payload keeps `Image` as the type instead of degrading to `Unknown`, and
+/// carries the decoder's reason under [`DECODE_ERROR_KEY`].
+fn image_decode_failure_metadata(
+    file_name: String,
+    file_path: String,
+    file_size: u64,
+    modified_timestamp: Option<i64>,
+    reason: String,
+) -> FileMetadata {
+    FileMetadata {
+        file_name,
+        file_path,
+        file_size,
+        modified_timestamp,
+        file_type: "Image".to_string(),
+        width: None,
+        height: None,
+        duration: None,
+        bit_rate: None,
+        sample_rate: None,
+        channels: None,
+        format_specific: serde_json::json!({ DECODE_ERROR_KEY: reason }),
+    }
 }
 
 /// Detects broad media type by inspecting well-known file signatures.
@@ -178,23 +216,16 @@ pub fn extract_metadata(path: &Path) -> Result<FileMetadata, String> {
         "image" => {
             match image::extract_image_metadata(path, file_name.clone(), file_path.clone(), file_size, modified_timestamp) {
                 Ok(metadata) => Ok(metadata),
-                Err(_) => {
-                    // If image processing fails, treat as unknown type (may have embedded JSON/text)
-                    Ok(FileMetadata {
-                        file_name,
-                        file_path,
-                        file_size,
-                        modified_timestamp,
-                        file_type: "Unknown".to_string(),
-                        width: None,
-                        height: None,
-                        duration: None,
-                        bit_rate: None,
-                        sample_rate: None,
-                        channels: None,
-                        format_specific: serde_json::json!({}),
-                    })
-                }
+                // A recognized image the decoder rejected is still an image:
+                // report the type plus the reason so a corrupt file is not
+                // indistinguishable from an unsupported one.
+                Err(reason) => Ok(image_decode_failure_metadata(
+                    file_name,
+                    file_path,
+                    file_size,
+                    modified_timestamp,
+                    reason,
+                )),
             }
         }
         "video" => {
@@ -424,5 +455,46 @@ mod tests {
 
         let _ = fs::remove_file(tiny);
         let _ = fs::remove_file(random);
+    }
+
+    #[test]
+    fn corrupt_image_reports_type_and_decoder_reason() {
+        // Valid PNG signature followed by garbage: detection says "image",
+        // the decoder refuses the body.
+        let corrupt = write_temp_file(
+            ".png",
+            &[137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0, 0, 0, 0, 0],
+        );
+
+        let metadata = extract_metadata(&corrupt).expect("corrupt image still yields metadata");
+
+        assert_eq!(metadata.file_type, "Image");
+        let reason = metadata
+            .format_specific
+            .get(DECODE_ERROR_KEY)
+            .and_then(|value| value.as_str())
+            .expect("decoder reason should be present");
+        assert!(!reason.is_empty(), "decoder reason should carry text");
+        assert!(metadata.format_specific.get("color_type").is_none());
+        assert_eq!(metadata.width, None);
+        assert_eq!(metadata.height, None);
+
+        let _ = fs::remove_file(corrupt);
+    }
+
+    #[test]
+    fn undetected_file_stays_unknown_without_decode_error() {
+        let unknown = write_temp_file(".bin", &[1, 2, 3, 4, 5, 6, 7, 8]);
+
+        let metadata = extract_metadata(&unknown).expect("unknown file still yields metadata");
+
+        assert_eq!(metadata.file_type, "Unknown");
+        assert!(metadata.format_specific.get(DECODE_ERROR_KEY).is_none());
+        assert_eq!(
+            metadata.format_specific.as_object().map(|object| object.len()),
+            Some(0)
+        );
+
+        let _ = fs::remove_file(unknown);
     }
 }

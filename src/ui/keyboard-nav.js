@@ -2,6 +2,45 @@ import { dom } from '../dom.js';
 import { state } from '../state.js';
 import { confirmCardEditorExit } from './card-editor.js';
 
+// Modal dialogs and full-screen overlays that must swallow global navigation keys.
+// `previewFileInfoOverlay` is deliberately absent: it is a small in-preview info box, not a modal.
+const KEY_BLOCKING_OVERLAY_KEYS = [
+    'jsonDiffModal',
+    'settingsModal',
+    'licensesModal',
+    'docViewerModal',
+    'bulkEditModal',
+    'surpriseOverlay',
+    'loadingOverlay',
+];
+
+/**
+ * Checks whether an overlay element is currently on screen.
+ * Modals toggle inline `display`, overlays toggle a visibility class.
+ * @param {HTMLElement | null | undefined} element
+ * @returns {boolean}
+ */
+function isOverlayShown(element) {
+    if (!element) {
+        return false;
+    }
+
+    if (element.classList?.contains('is-visible') || element.classList?.contains('visible')) {
+        return true;
+    }
+
+    const display = element.style?.display;
+    return Boolean(display) && display !== 'none';
+}
+
+/**
+ * Checks whether any modal dialog or full-screen overlay is open.
+ * @returns {boolean}
+ */
+export function isModalOrOverlayOpen() {
+    return KEY_BLOCKING_OVERLAY_KEYS.some((key) => isOverlayShown(dom[key]));
+}
+
 /**
  * Checks if focused element is an editable context where arrow keys should not navigate files.
  * @returns {boolean}
@@ -61,7 +100,7 @@ export async function selectFileByOffset(offset, selectFileInList, onFileSelecte
  */
 export function initKeyboardNavigation(selectFileInList, onFileSelected, onDeleteSelected) {
     document.addEventListener('keydown', (event) => {
-        if (dom.jsonDiffModal?.style.display === 'flex') {
+        if (isModalOrOverlayOpen()) {
             return;
         }
 

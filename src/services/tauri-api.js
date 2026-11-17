@@ -137,6 +137,33 @@ export function listDirectoryFiles(dirPath) {
 }
 
 /**
+ * Lists the bulk-edit capability matrix for the selected files.
+ * @param {string[]} paths
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export function getBulkEditCapabilities(paths) {
+    return invoke('get_bulk_edit_capabilities', { paths });
+}
+
+/**
+ * Builds a side-effect-free bulk-edit plan.
+ * @param {{request: {paths: string[], params: Record<string, string>}}} payload
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export function planBulkEdit(payload) {
+    return invoke('plan_bulk_edit', payload);
+}
+
+/**
+ * Replays one reviewed bulk-edit plan.
+ * @param {{plan: Record<string, unknown>}} payload
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export function applyBulkEdit(payload) {
+    return invoke('apply_bulk_edit', payload);
+}
+
+/**
  * Retrieves full metadata payload for one selected file.
  * Architectural context: delegates format-specific parsing to backend extractors.
  * @param {string} filePath

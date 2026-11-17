@@ -25,6 +25,7 @@
 
 ## What's New
 
+- **Bulk edit** - Select multiple files via checkbox and update/remove metadata for all of them
 - **JSON file support** - Browse `.json` files in the folder view; card-schema JSON opens Card Editor with all fields populated; non-card JSON shows formatted preview; `.json` can also be opened via drag-drop or file picker
 - **LLM-assisted field generation** - Per-field AI generation with regenerate/revert,
   generate all button, editable prompt templates, model discovery, and enforced

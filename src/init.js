@@ -10,6 +10,7 @@ import { applyFolderFilters, initFolderFilters, loadDirectory, selectFileInList,
 import { getPreferredEmbeddedJsonText, initEmbeddedJsonUI, loadEmbeddedBase64Json, updateCharacterTextPanel } from './ui/embedded-json.js';
 import { initDragDrop } from './ui/drag-drop.js';
 import { initKeyboardNavigation, isTextEditingContext } from './ui/keyboard-nav.js';
+import { initBulkEditModal } from './ui/bulk-edit-modal.js';
 import { initLicensesModal } from './ui/licenses-modal.js';
 import { displayMetadata } from './ui/metadata-panel.js';
 import { setPreviewFileInfoDetails, updatePreview } from './ui/preview.js';
@@ -661,6 +662,14 @@ export async function initApp() {
     initAssistantUI();
     initResizableLayout();
     initKeyboardNavigation(selectFileInList, loadFileMetadata, () => deleteSelectedFile(loadFileMetadata));
+    initBulkEditModal({
+        onApplied: async () => {
+            if (!state.currentDirectory) {
+                return;
+            }
+            await loadDirectory(state.currentDirectory, loadFileMetadata);
+        },
+    });
 
     initDragDrop(loadFileMetadata, {
         onDirectoryDropped: openDirectoryPath,

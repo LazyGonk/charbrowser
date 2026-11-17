@@ -28,6 +28,8 @@ export const state = {
     licensesGeneratedAt: 'unknown',
     cardEditorMode: 'view',
     preserveEmptySelection: false,
+    bulkSelectedPaths: new Set(),
+    bulkSelectionAnchor: null,
 };
 
 /**

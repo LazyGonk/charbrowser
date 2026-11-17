@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_data;
+mod bulk_edit;
 mod commands;
 mod llm_history;
 mod metadata;
@@ -35,6 +36,9 @@ fn main() {
             commands::files::update_file_metadata_fields,
             commands::files::delete_file_to_trash,
             commands::browser::list_directory_files,
+            commands::bulk_edit::get_bulk_edit_capabilities,
+            commands::bulk_edit::plan_bulk_edit,
+            commands::bulk_edit::apply_bulk_edit,
             commands::system::open_url_in_system_browser,
             commands::system::open_legal_document_in_system_browser,
             llm_history::append_llm_iteration_response,

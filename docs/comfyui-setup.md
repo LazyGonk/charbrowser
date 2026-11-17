@@ -40,7 +40,7 @@ ComfyUI/
 
 ## Example Workflows
 
-CharBrowser includes example workflow JSON files in `plans/comfyui_api/`:
+CharBrowser includes example workflow JSON files in `docs/comfyui_api/`:
 
 | File | Model | Style | Status |
 |------|-------|------|-------|

@@ -6,6 +6,7 @@
     display: flex;
     align-items: center;
     gap: 16px;
+    flex-wrap: wrap;
         box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
@@ -17,6 +18,7 @@
 }
 
 #openFolderBtn,
+#bulkEditBtn,
 #createCardBtn,
 #clearSelectionBtn,
 #assistantToggleBtn,
@@ -101,7 +103,8 @@
 .toolbar-tip {
     color: var(--text-secondary);
     font-size: 12px;
-    margin-left: auto;
+    /* Own row below the buttons, so they never wrap because of the tip. */
+    flex: 0 0 100%;
     max-width: 720px;
     white-space: nowrap;
     overflow: hidden;

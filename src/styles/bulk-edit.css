@@ -1,0 +1,226 @@
+/* Bulk edit: row checkboxes, review modal, result summary. */
+
+.file-list-select-all {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px 8px;
+    margin-bottom: 4px;
+}
+
+.file-select-checkbox {
+    margin: 0 8px 0 0;
+    flex: 0 0 auto;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.bulk-edit-dialog {
+    width: min(1100px, 96vw);
+}
+
+.bulk-edit-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.bulk-edit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.bulk-edit-field input,
+.bulk-edit-field select {
+    width: 100%;
+}
+
+.bulk-edit-hint {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.bulk-edit-hint code {
+    font-size: 11px;
+}
+
+.bulk-edit-discovery {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.bulk-edit-discovery-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.bulk-edit-discovery-title {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.bulk-edit-discovery-summary {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.bulk-edit-discovery-list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    max-height: 26vh;
+    overflow: auto;
+}
+
+.bulk-edit-discovery-row {
+    display: grid;
+    grid-template-columns: minmax(140px, 1fr) minmax(180px, 2fr) auto;
+    gap: 12px;
+    align-items: baseline;
+    width: 100%;
+    padding: 6px 10px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.bulk-edit-discovery-row:last-child {
+    border-bottom: 0;
+}
+
+.bulk-edit-discovery-row:hover,
+.bulk-edit-discovery-row:focus-visible {
+    background: var(--accent-soft);
+    outline: none;
+}
+
+.bulk-edit-discovery-row.is-active {
+    background: var(--accent-soft);
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.bulk-edit-discovery-locator {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow-wrap: anywhere;
+}
+
+.bulk-edit-discovery-values {
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+}
+
+.bulk-edit-discovery-meta {
+    color: var(--text-secondary);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.bulk-edit-discovery-empty {
+    padding: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.bulk-edit-table-wrap {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: auto;
+    background: var(--bg-secondary);
+    max-height: 44vh;
+}
+
+.bulk-edit-table {
+    min-width: 760px;
+}
+
+.bulk-edit-empty {
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.bulk-edit-row-error td:nth-child(2) {
+    color: #ff6b6b;
+}
+
+.bulk-edit-row-unsupported td:nth-child(2),
+.bulk-edit-row-skipped td:nth-child(2) {
+    color: #f0c674;
+}
+
+.bulk-edit-row-changed td:nth-child(2),
+.bulk-edit-row-applied td:nth-child(2) {
+    color: #7bd88f;
+}
+
+.bulk-edit-results {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 22vh;
+    overflow: auto;
+    font-size: 12px;
+}
+
+.bulk-edit-result-headline {
+    font-weight: 600;
+}
+
+.bulk-edit-result-line {
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+}
+
+.bulk-edit-result-warning {
+    color: #f0c674;
+}
+
+.bulk-edit-journal {
+    font-size: 11px;
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+
+/* Inline apply confirmation, rendered inside the bulk-edit modal so it is
+   never hidden behind the card editor's own confirm bar. */
+.bulk-edit-confirm {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    margin: 8px 0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.bulk-edit-status-success {
+    color: #7bd88f;
+}
+
+.bulk-edit-status-error {
+    color: #ff6b6b;
+}
+
+#bulkEditModal .btn:disabled,
+#bulkEditModal .folder-filter-input:disabled,
+#bulkEditModal .folder-filter-select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}

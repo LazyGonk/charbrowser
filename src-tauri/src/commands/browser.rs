@@ -1,7 +1,7 @@
 use std::path::Path;
 
 /// Lists supported media files in one directory.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_directory_files(dir_path: String) -> Result<Vec<String>, String> {
     let path = Path::new(&dir_path);
 

@@ -15,7 +15,7 @@ Include:
 - Affected versions/commit hash
 - Potential impact
 
-Please do not open a public GitHub issue for suspected vulnerabilities.
+Please do not open a public issue for a suspected vulnerability; contact the maintainers first so a fix can be prepared before disclosure.
 
 ## Response Expectations
 

@@ -1,6 +1,6 @@
 {
   "name": "charbrowser",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A desktop application to display metadata from images, videos, and audio files",
   "author": "LazyGonk",
   "license": "MIT",
@@ -27,8 +27,8 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
-    "@vitest/coverage-v8": "^4.1.4",
-    "vite": "^8.0.8",
-    "vitest": "^4.1.4"
+    "@vitest/coverage-v8": "^4.1.12",
+    "vite": "^8.3.8",
+    "vitest": "^4.1.12"
   }
 }

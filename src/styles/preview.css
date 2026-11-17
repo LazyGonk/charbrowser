@@ -4,6 +4,10 @@
     height: 100%;
     display: flex;
     flex-direction: column;
+    /* Size container for the preview/character-text row: the pane can be narrow
+       on a wide window (sidebar, splitters), so layout keys off pane width. */
+    container-type: inline-size;
+    container-name: preview-pane;
 }
 
 .preview-area {
@@ -14,8 +18,9 @@
     justify-content: stretch;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
-    overflow-y: auto;
-    overflow-x: hidden;
+    /* Scroll on both axes rather than hide: clipped overflow made the preview
+       (and, before, the whole right side of the row) unreachable. */
+    overflow: auto;
     padding: 16px;
     gap: 16px;
 }
@@ -146,6 +151,9 @@
 .preview-image {
     max-width: 100%;
     max-height: 100%;
+    /* Let the image shrink inside the stage instead of forcing the row wider. */
+    min-width: 0;
+    min-height: 0;
     object-fit: contain;
 }
 
@@ -242,3 +250,35 @@
     font-size: 18px;
 }
 
+/* Stack the character text panel under the preview when the pane itself is
+   narrow, not only when the viewport is: below this the row cannot give the
+   stage a usable width next to the panel's 280px floor, and it used to collapse
+   to zero while `overflow-x: hidden` made the rest unreachable. Kept last so it
+   overrides the base .character-text-panel sizing by source order. */
+@container preview-pane (max-width: 640px) {
+    .preview-area {
+        flex-direction: column;
+    }
+
+    /* Media stages shrink to the row height so the whole image fits; the audio
+       layouts keep their own content height (cover art plus controls). */
+    .preview-stage:not(.audio-cover-layout):not(.audio-no-cover-layout) {
+        min-height: 0;
+    }
+
+    /* Specificity note: dialogs-responsive.css's viewport query caps the
+       panel at 45vh later in the cascade, so this needs the extra class. */
+    .preview-area > .character-text-panel {
+        /* Keep a usable text panel: without this the stacked row's flex
+           shrink collapsed it to its border. Percentage caps resolve against
+           the row height so the preview keeps its share on short windows. */
+        flex: 0 0 auto;
+        width: 100%;
+        min-width: 0;
+        max-height: 40%;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        padding-left: 0;
+        padding-top: 12px;
+    }
+}

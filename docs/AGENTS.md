@@ -148,7 +148,6 @@ npm run licenses:generate
 - Update `CONTRIBUTING.md` for development workflow changes
 - Update `docs/MAINTAINING.md` for release/maintenance changes
 - Regenerate licenses: `npm run licenses:generate`
-- See [`plans/developer-documentation.md`](plans/developer-documentation.md) for comprehensive documentation guidelines
 
 ---
 

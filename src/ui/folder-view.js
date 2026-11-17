@@ -11,6 +11,17 @@ import { createLoadingOverlayController } from '../utils/loading-overlay.js';
 import { getInputValue } from '../utils/string-utils.js';
 import { createFileIcon } from './file-icons.js';
 import { confirmCardEditorExit, requestCardEditorConfirmation } from './card-editor.js';
+import { refreshBulkEditButton } from './bulk-edit-modal.js';
+import {
+    areAllBulkSelected,
+    clearBulkSelection,
+    isBulkSelected,
+    pruneBulkSelection,
+    removeBulkSelection,
+    selectBulkRange,
+    toggleAllBulkSelection,
+    toggleBulkSelection,
+} from './bulk-selection.js';
 
 let createNewCardHandler = () => {};
 
@@ -79,6 +90,8 @@ export async function loadDirectory(dirPath, onLoadSelectedFile) {
         state.folderLoadToken += 1;
         state.currentDirectory = dirPath;
         state.preserveEmptySelection = false;
+        clearBulkSelection(state);
+        refreshBulkEditButton();
         resetThumbnailQueue();
         state.metadataFilterCache.clear();
         state.embeddedJsonPresenceCache.clear();
@@ -125,10 +138,47 @@ export function renderFileList(files, onFileSelected) {
     }
 
     const fragment = document.createDocumentFragment();
+    fragment.appendChild(addSelectAllRow(files));
     for (const file of files) {
         addFileToList(file, onFileSelected, fragment, showThumbnails);
     }
     dom.fileList.appendChild(fragment);
+}
+
+/**
+ * Builds the select-all row that sits above the file rows.
+ * The checkbox selects or clears every visible path at once.
+ * @param {string[]} files Paths rendered in the list.
+ * @returns {HTMLDivElement}
+ */
+function addSelectAllRow(files) {
+    const row = document.createElement('div');
+    row.className = 'file-list-select-all';
+
+    const label = document.createElement('label');
+    label.className = 'folder-filter-checkbox';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'file-select-all-checkbox';
+    checkbox.id = 'bulkSelectAllToggle';
+    checkbox.setAttribute('aria-label', `Select all ${files.length} visible files for bulk edit`);
+
+    const selectedVisible = files.filter((filePath) => isBulkSelected(state, filePath)).length;
+    checkbox.checked = areAllBulkSelected(state, files);
+    checkbox.indeterminate = selectedVisible > 0 && selectedVisible < files.length;
+    checkbox.addEventListener('change', () => {
+        toggleAllBulkSelection(state, files);
+        refreshBulkEditButton();
+    });
+
+    const text = document.createElement('span');
+    text.textContent = `Select all (${files.length})`;
+
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    row.appendChild(label);
+    return row;
 }
 
 /**
@@ -155,6 +205,23 @@ export function addFileToList(filePath, onFileSelected, parent = dom.fileList, s
 
     const fileName = getFileName(filePath);
     const ext = getExtension(filePath);
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'file-select-checkbox';
+    checkbox.checked = isBulkSelected(state, filePath);
+    checkbox.title = 'Include in bulk edit';
+    checkbox.setAttribute('aria-label', `Include ${fileName} in bulk edit`);
+    checkbox.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (event.shiftKey) {
+            selectBulkRange(state, state.currentFiles, filePath);
+        } else {
+            toggleBulkSelection(state, filePath);
+        }
+        refreshBulkEditButton();
+    });
+    item.appendChild(checkbox);
 
     if (IMAGE_EXTS.has(ext) && showThumbnails) {
         const img = document.createElement('img');
@@ -289,6 +356,8 @@ export async function applyFolderFilters(onFileSelected, options = {}) {
     sortFiles(filtered, state.metadataFilterCache, sortBy, sortDirection);
 
     state.currentFiles = filtered;
+    pruneBulkSelection(state, filtered);
+    refreshBulkEditButton();
     renderFileList(filtered, onFileSelected);
 
     if (state.allFolderFiles.length === 0) {
@@ -407,6 +476,8 @@ export async function deleteSelectedFile(onFileSelected) {
     state.allFolderFiles = state.allFolderFiles.filter(f => f !== filePath);
     state.metadataFilterCache.delete(filePath);
     state.embeddedJsonPresenceCache.delete(filePath);
+    removeBulkSelection(state, filePath);
+    refreshBulkEditButton();
 
     // Find next file to select
     let nextFile = null;
